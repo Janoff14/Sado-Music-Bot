@@ -1,0 +1,552 @@
+"""
+Music handlers - user-facing commands for artist profiles and track submissions
+"""
+import uuid
+from aiogram import Router, F, Bot
+from aiogram.filters import Command
+from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
+from sado_music_bot.config import Config
+from sado_music_bot.db import DB
+from sado_music_bot.keyboards import kb_lang, kb_genres, kb_profile_actions, kb_admin_review
+from sado_music_bot.texts import track_caption_with_payment
+
+router = Router()
+
+
+# =====================
+# FSM States
+# =====================
+class OnboardingStates(StatesGroup):
+    waiting_name = State()
+    waiting_payment_link = State()
+    waiting_genre = State()
+    waiting_bio = State()
+
+
+class SubmitStates(StatesGroup):
+    waiting_audio = State()
+    waiting_title = State()
+    waiting_genre = State()
+    waiting_caption = State()
+
+
+class ProfileEditStates(StatesGroup):
+    waiting_value = State()
+
+
+# =====================
+# /start
+# =====================
+@router.message(Command("start"))
+async def cmd_start(m: Message, db: DB, cfg: Config):
+    if not m.from_user:
+        return
+
+    user_id = m.from_user.id
+
+    # Check for deep link parameters
+    if m.text and len(m.text.split()) > 1:
+        param = m.text.split()[1]
+
+        # Handle donate_<track_id>
+        if param.startswith("donate_"):
+            track_id = param.replace("donate_", "")
+            track = await db.get_track(track_id)
+            if not track:
+                await m.answer("❌ Track not found.")
+                return
+
+            # Unpack track info
+            _, artist_id, track_title, genre, _, _, _, _, status = track
+
+            if status != "ACTIVE":
+                await m.answer("❌ Track is no longer active.")
+                return
+
+            # Get artist info
+            artist = await db.get_artist(artist_id)
+            if not artist:
+                await m.answer("❌ Artist not found.")
+                return
+
+            artist_name = artist[2]
+
+            # Import keyboard and text functions
+            from sado_music_bot.keyboards import kb_donation_amounts
+            from sado_music_bot.texts import donation_start_text
+
+            # Show donation amount selection
+            await m.answer(
+                donation_start_text(track_title, artist_name),
+                reply_markup=kb_donation_amounts(track_id)
+            )
+            return
+
+        # Handle artist_<artist_id>
+        elif param.startswith("artist_"):
+            artist_id = param.replace("artist_", "")
+            artist = await db.get_artist(artist_id)
+            if not artist:
+                await m.answer("❌ Artist not found.")
+                return
+
+            # Unpack artist info
+            _, _, artist_name, _, _, _, bio = artist
+
+            # Get tracks
+            total_tracks = await db.count_artist_tracks(artist_id)
+            tracks = await db.list_artist_tracks_with_file(artist_id, limit=10)
+
+            from sado_music_bot.keyboards import kb_track_support
+            from sado_music_bot.texts import artist_profile_text
+
+            # Show artist profile
+            tracks_list = [(t[1], t[2], t[0]) for t in tracks]  # (title, genre, track_id)
+            profile_text = artist_profile_text(artist_name, bio, total_tracks, tracks_list)
+
+            await m.answer(profile_text)
+
+            # Send each track with support button
+            for track in tracks[:5]:  # Limit to 5 tracks to avoid spam
+                track_id, title, genre, file_id, _ = track
+                if file_id:
+                    try:
+                        await m.answer_audio(
+                            audio=file_id,
+                            caption=f"🎵 <b>{title}</b>\n🎧 {genre}",
+                            reply_markup=kb_track_support(track_id)
+                        )
+                    except:
+                        pass  # Skip if audio can't be sent
+
+            return
+
+    # Default /start behavior
+    artist = await db.get_artist_by_tg(user_id)
+
+    if artist:
+        await m.answer(
+            "✅ Welcome back!\n\n"
+            "• /submit — upload a new track\n"
+            "• /profile — view/edit your profile\n"
+            "• /cancel — cancel current operation"
+        )
+    else:
+        await m.answer(
+            "🎵 <b>Welcome to Sado Music!</b>\n\n"
+            "Share your music with the world and receive support from fans.\n\n"
+            "Choose your language / Tilni tanlang:",
+            reply_markup=kb_lang()
+        )
+
+
+@router.callback_query(F.data.startswith("lang:"))
+async def on_lang_choice(cb: CallbackQuery, db: DB):
+    if not cb.from_user or not cb.data:
+        return
+
+    lang = cb.data.split(":")[1]
+    if lang not in ("uz", "ru"):
+        await cb.answer("Invalid language")
+        return
+
+    await db.set_lang(cb.from_user.id, lang)
+    await cb.message.edit_text(
+        "✅ Language saved!\n\n"
+        "Use /submit to upload your first track."
+    )
+    await cb.answer()
+
+
+# =====================
+# /chatid (utility)
+# =====================
+@router.message(Command("chatid"))
+async def cmd_chatid(m: Message):
+    """Get chat ID - useful for configuring channels"""
+    if m.chat:
+        await m.answer(f"Chat ID: <code>{m.chat.id}</code>")
+
+
+# =====================
+# /profile
+# =====================
+@router.message(Command("profile"))
+async def cmd_profile(m: Message, db: DB):
+    if not m.from_user:
+        return
+
+    artist = await db.get_artist_by_tg(m.from_user.id)
+    if not artist:
+        await m.answer("No profile yet. Use /submit to create one.")
+        return
+
+    artist_id, tg_user_id, display_name, payment_link, profile_url, default_genre, bio = artist
+    tracks = await db.list_artist_tracks(artist_id, limit=5)
+    tracks_text = "\n".join([f"• {t[1]} ({t[2]})" for t in tracks]) or "No tracks yet"
+
+    profile_text = (
+        f"🎤 <b>{display_name}</b>\n"
+        f"💳 Payment: {payment_link or '—'}\n"
+        f"🎧 Default genre: {default_genre or '—'}\n"
+        f"📝 Bio: {bio or '—'}\n\n"
+        f"🎵 <b>Recent tracks:</b>\n{tracks_text}"
+    )
+
+    await m.answer(profile_text, reply_markup=kb_profile_actions())
+
+
+@router.callback_query(F.data.startswith("profile:edit:"))
+async def on_profile_edit(cb: CallbackQuery, db: DB, state: FSMContext):
+    if not cb.from_user or not cb.data:
+        return
+
+    artist = await db.get_artist_by_tg(cb.from_user.id)
+    if not artist:
+        await cb.message.edit_text("No profile found. Use /submit first.")
+        await cb.answer()
+        return
+
+    field = cb.data.split(":")[2]
+    await state.update_data(edit_artist_id=artist[0], edit_field=field)
+
+    if field == "default_genre":
+        await cb.message.edit_text("Choose your default genre:", reply_markup=kb_genres("profilegenre"))
+        await state.set_state(ProfileEditStates.waiting_value)
+    else:
+        prompts = {
+            "display_name": "Send your new artist name:",
+            "payment_link": "Send your new payment link (Click/Payme URL):",
+            "bio": "Send your new bio (or '-' to clear):",
+        }
+        await cb.message.edit_text(prompts.get(field, "Send new value:"))
+        await state.set_state(ProfileEditStates.waiting_value)
+
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("profilegenre:"))
+async def on_profile_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
+    if not cb.data:
+        return
+
+    choice = cb.data.split(":")[1]
+    if choice == "CANCEL":
+        await cb.message.edit_text("Cancelled.")
+        await state.clear()
+        await cb.answer()
+        return
+
+    data = await state.get_data()
+    artist_id = data.get("edit_artist_id")
+    if not artist_id:
+        await cb.message.edit_text("Session expired. Run /profile again.")
+        await state.clear()
+        await cb.answer()
+        return
+
+    await db.update_artist_field(artist_id, "default_genre", choice)
+    await cb.message.edit_text(f"✅ Default genre updated to: {choice}")
+    await state.clear()
+    await cb.answer()
+
+
+@router.message(ProfileEditStates.waiting_value)
+async def on_profile_edit_text(m: Message, db: DB, state: FSMContext):
+    if not m.text:
+        return
+
+    data = await state.get_data()
+    artist_id = data.get("edit_artist_id")
+    field = data.get("edit_field")
+
+    if not artist_id or not field:
+        await m.answer("Session expired. Run /profile again.")
+        await state.clear()
+        return
+
+    val = m.text.strip()
+    if field == "bio" and val == "-":
+        val = None
+
+    await db.update_artist_field(artist_id, field, val if val else None)
+    await m.answer("✅ Updated!")
+    await state.clear()
+
+
+# =====================
+# /submit
+# =====================
+@router.message(Command("submit"))
+async def cmd_submit(m: Message, db: DB, state: FSMContext):
+    if not m.from_user:
+        return
+
+    artist = await db.get_artist_by_tg(m.from_user.id)
+    if not artist:
+        # Start onboarding for new artists
+        await m.answer(
+            "🎤 <b>Create your artist profile</b>\n\n"
+            "Send your artist/stage name:"
+        )
+        await state.set_state(OnboardingStates.waiting_name)
+        return
+
+    # Existing artist - go straight to audio upload
+    artist_id, _, display_name, _, _, default_genre, _ = artist
+    await m.answer(
+        f"Uploading as: <b>{display_name}</b>\n\n"
+        f"Send your audio file (Music/Audio format)."
+    )
+    await state.update_data(artist_id=artist_id, default_genre=default_genre)
+    await state.set_state(SubmitStates.waiting_audio)
+
+
+# =====================
+# Onboarding flow
+# =====================
+@router.message(OnboardingStates.waiting_name)
+async def onboard_name(m: Message, state: FSMContext):
+    name = (m.text or "").strip()
+    if len(name) < 2:
+        await m.answer("Name too short. Try again:")
+        return
+
+    await state.update_data(onb_name=name)
+    await m.answer(
+        "Send your payment link (Click/Payme URL):\n\n"
+        "<i>This is where fans will send donations.</i>"
+    )
+    await state.set_state(OnboardingStates.waiting_payment_link)
+
+
+@router.message(OnboardingStates.waiting_payment_link)
+async def onboard_paylink(m: Message, state: FSMContext):
+    link = (m.text or "").strip()
+    if not (link.startswith("http://") or link.startswith("https://")):
+        await m.answer("Please send a valid URL starting with http:// or https://")
+        return
+
+    await state.update_data(onb_paylink=link)
+    await m.answer("Choose your default genre:", reply_markup=kb_genres("onbgenre"))
+    await state.set_state(OnboardingStates.waiting_genre)
+
+
+@router.callback_query(F.data.startswith("onbgenre:"))
+async def onboard_genre_choice(cb: CallbackQuery, state: FSMContext):
+    if not cb.data:
+        return
+
+    choice = cb.data.split(":")[1]
+    if choice == "CANCEL":
+        await cb.message.edit_text("Cancelled.")
+        await state.clear()
+        await cb.answer()
+        return
+
+    await state.update_data(onb_default_genre=choice)
+    await cb.message.edit_text("Optional: send a short bio (1-2 lines), or '-' to skip.")
+    await state.set_state(OnboardingStates.waiting_bio)
+    await cb.answer()
+
+
+@router.message(OnboardingStates.waiting_bio)
+async def onboard_bio(m: Message, db: DB, state: FSMContext):
+    if not m.from_user:
+        return
+
+    bio = (m.text or "").strip()
+    if bio == "-":
+        bio = None
+
+    data = await state.get_data()
+    name = data.get("onb_name")
+    link = data.get("onb_paylink")
+    default_genre = data.get("onb_default_genre")
+
+    artist_id = "art_" + uuid.uuid4().hex[:10]
+    await db.upsert_artist(
+        artist_id=artist_id,
+        tg_user_id=m.from_user.id,
+        display_name=name,
+        payment_link=link,
+        profile_url=None,
+        default_genre=default_genre,
+        bio=bio
+    )
+
+    await state.clear()
+    await state.update_data(artist_id=artist_id, default_genre=default_genre)
+
+    await m.answer(
+        "✅ Profile created!\n\n"
+        "Now send your audio file (Music/Audio format)."
+    )
+    await state.set_state(SubmitStates.waiting_audio)
+
+
+# =====================
+# Track submission flow
+# =====================
+@router.message(SubmitStates.waiting_audio)
+async def sub_audio(m: Message, state: FSMContext):
+    audio = m.audio
+    if not audio:
+        await m.answer("Please send an audio file (Music/Audio format, not voice notes).")
+        return
+
+    await state.update_data(file_id=audio.file_id)
+    await m.answer("Send the track title:")
+    await state.set_state(SubmitStates.waiting_title)
+
+
+@router.message(SubmitStates.waiting_title)
+async def sub_title(m: Message, state: FSMContext):
+    title = (m.text or "").strip()
+    if len(title) < 2:
+        await m.answer("Title too short. Try again:")
+        return
+
+    await state.update_data(title=title)
+    data = await state.get_data()
+    default_genre = data.get("default_genre")
+
+    if default_genre:
+        await m.answer(f"Choose genre (default: {default_genre}):", reply_markup=kb_genres("subgenre"))
+    else:
+        await m.answer("Choose genre:", reply_markup=kb_genres("subgenre"))
+
+    await state.set_state(SubmitStates.waiting_genre)
+
+
+@router.callback_query(F.data.startswith("subgenre:"))
+async def sub_genre_choice(cb: CallbackQuery, state: FSMContext):
+    if not cb.data:
+        return
+
+    choice = cb.data.split(":")[1]
+    if choice == "CANCEL":
+        await cb.message.edit_text("Cancelled.")
+        await state.clear()
+        await cb.answer()
+        return
+
+    await state.update_data(genre=choice)
+    await cb.message.edit_text("Optional: send a short caption/description, or '-' to skip.")
+    await state.set_state(SubmitStates.waiting_caption)
+    await cb.answer()
+
+
+@router.message(SubmitStates.waiting_caption)
+async def sub_caption(m: Message, bot: Bot, cfg: Config, db: DB, state: FSMContext):
+    if not m.from_user:
+        return
+
+    caption = (m.text or "").strip()
+    if caption == "-":
+        caption = None
+
+    data = await state.get_data()
+    artist_id = data.get("artist_id")
+    file_id = data.get("file_id")
+    title = data.get("title")
+    genre = data.get("genre")
+
+    if not all([artist_id, file_id, title, genre]):
+        await m.answer("Something went wrong. Please try /submit again.")
+        await state.clear()
+        return
+
+    artist = await db.get_artist(artist_id)
+    if not artist:
+        await m.answer("Artist not found. Please try /submit again.")
+        await state.clear()
+        return
+
+    _, _, artist_name, payment_link, _, _, _ = artist
+
+    # Create submission for admin review
+    submission_id = "sub_" + uuid.uuid4().hex[:10]
+
+    try:
+        await db.create_submission(
+            submission_id=submission_id,
+            artist_id=artist_id,
+            submitter_user_id=m.from_user.id,
+            title=title,
+            genre=genre,
+            caption=caption,
+            telegram_file_id=file_id
+        )
+
+        # Send to admin for review
+        review_caption = (
+            f"🎵 <b>New Submission</b>\n\n"
+            f"<b>Title:</b> {title}\n"
+            f"<b>Artist:</b> {artist_name}\n"
+            f"<b>Genre:</b> {genre}\n"
+        )
+        if caption:
+            review_caption += f"<b>Caption:</b> {caption}\n"
+        if payment_link:
+            review_caption += f"<b>Payment:</b> {payment_link}\n"
+        review_caption += f"\n<code>ID: {submission_id}</code>"
+
+        try:
+            admin_msg = await bot.send_audio(
+                chat_id=cfg.admin_id,
+                audio=file_id,
+                caption=review_caption,
+                reply_markup=kb_admin_review(submission_id)
+            )
+            await db.set_submission_admin_message(submission_id, admin_msg.message_id)
+            print(f"[INFO] Sent submission {submission_id} to admin")
+        except Exception as e:
+            print(f"[ERROR] Failed to send to admin: {e}")
+
+        await m.answer(
+            f"✅ <b>Submission received!</b>\n\n"
+            f"Your track <b>{title}</b> has been sent for review.\n"
+            f"You'll be notified once it's approved.\n\n"
+            f"Submission ID: <code>{submission_id}</code>"
+        )
+
+    except Exception as e:
+        print(f"[ERROR] Failed to create submission: {e}")
+        await m.answer(f"❌ Failed to submit: {e}")
+
+    await state.clear()
+
+
+# =====================
+# /cancel
+# =====================
+@router.message(Command("cancel"))
+async def cmd_cancel(m: Message, state: FSMContext):
+    current = await state.get_state()
+    await state.clear()
+    if current:
+        await m.answer("Cancelled.")
+    else:
+        await m.answer("Nothing to cancel.")
+
+
+# =====================
+# Help/fallback
+# =====================
+@router.message(Command("help"))
+async def cmd_help(m: Message):
+    await m.answer(
+        "🎵 <b>Sado Music Bot</b>\n\n"
+        "<b>Commands:</b>\n"
+        "• /start — Start the bot\n"
+        "• /submit — Submit a new track\n"
+        "• /profile — View/edit your artist profile\n"
+        "• /cancel — Cancel current operation\n"
+        "• /chatid — Get current chat ID\n\n"
+        "<i>Donation buttons are in Demo mode for now.</i>"
+    )
+
