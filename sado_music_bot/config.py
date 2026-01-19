@@ -16,7 +16,6 @@ class Config:
     admin_id: int
     bot_username: str = ""
     app_name: str = "Sado Music"
-    db_path: str = "sado.db"
     max_donations_per_hour: int = 5
 
     # Genre channels (where tracks get posted)
@@ -30,6 +29,11 @@ class Config:
     discussion_rock: str = ""
     discussion_hiphop: str = ""
     discussion_discovery: str = ""
+
+    @property
+    def db_path(self):
+        # Use DATABASE_URL for Postgres
+        return os.getenv("DATABASE_URL")
 
 
 def _parse_chat_id(val: str) -> int | str:
@@ -57,7 +61,6 @@ def load_config() -> Config:
         admin_id=admin_id,
         bot_username=os.getenv("BOT_USERNAME", ""),
         app_name=os.getenv("APP_NAME", "Sado Music"),
-        db_path=os.getenv("DB_PATH", "sado.db"),
         max_donations_per_hour=int(os.getenv("MAX_DONATIONS_PER_HOUR", "5")),
         # Genre channels
         channel_pop=os.getenv("CHANNEL_POP", ""),
@@ -106,4 +109,3 @@ def get_discussion_for_genre(cfg: Config, genre: str) -> int | str:
     attr = GENRE_DISCUSSIONS.get(genre, "discussion_discovery")
     val = getattr(cfg, attr, "")
     return _parse_chat_id(val) if val else 0
-
