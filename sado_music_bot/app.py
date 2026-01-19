@@ -5,6 +5,8 @@ Aiogram v3 + SQLite (aiosqlite)
 import asyncio
 import os
 import psycopg2
+import traceback
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 
@@ -84,11 +86,19 @@ COMMIT;
 
 
 def init_db():
+    print("INIT_DB: starting")
     db_url = os.environ["DATABASE_URL"]
-    with psycopg2.connect(db_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute(SCHEMA_SQL)
-        conn.commit()
+    print("INIT_DB: got DATABASE_URL (len=%d)" % len(db_url))
+    try:
+        with psycopg2.connect(db_url) as conn:
+            with conn.cursor() as cur:
+                print("INIT_DB: executing schema")
+                cur.execute(SCHEMA_SQL)
+            conn.commit()
+        print("INIT_DB: done OK")
+    except Exception as e:
+        print("INIT_DB: FAILED:", repr(e))
+        traceback.print_exc()
 
 
 async def main():
@@ -151,3 +161,5 @@ if __name__ == "__main__":
     init_db()
     print("✅ Database tables initialized with foreign keys and indexes.")
     asyncio.run(main())
+else:
+    init_db()
