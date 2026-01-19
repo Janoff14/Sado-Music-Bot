@@ -96,6 +96,17 @@ def init_db() -> None:
                     cur.execute(stmt)
             conn.commit()
         print("INIT_DB: done OK (tables ensured)")
+        # List tables after schema creation
+        with psycopg2.connect(db_url) as conn2:
+            with conn2.cursor() as cur2:
+                cur2.execute("""
+                    SELECT tablename
+                    FROM pg_tables
+                    WHERE schemaname = 'public'
+                    ORDER BY tablename;
+                """)
+                tables = [r[0] for r in cur2.fetchall()]
+        print("INIT_DB: tables now =", tables)
     except Exception as e:
         print("INIT_DB: FAILED:", repr(e))
         traceback.print_exc()
