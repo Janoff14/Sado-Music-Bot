@@ -8,6 +8,7 @@ def init_db():
     conn = psycopg2.connect(db_url)
     with conn.cursor() as cur:
         cur.execute("""
+        BEGIN;
         CREATE TABLE IF NOT EXISTS user_settings (
             user_id BIGINT PRIMARY KEY,
             lang TEXT DEFAULT 'uz',
@@ -25,7 +26,7 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS submissions (
             submission_id TEXT PRIMARY KEY,
-            artist_id TEXT NOT NULL,
+            artist_id TEXT NOT NULL REFERENCES artists(artist_id) ON DELETE CASCADE,
             submitter_user_id BIGINT NOT NULL,
             title TEXT NOT NULL,
             genre TEXT NOT NULL,
@@ -38,7 +39,7 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS tracks (
             track_id TEXT PRIMARY KEY,
-            artist_id TEXT NOT NULL,
+            artist_id TEXT NOT NULL REFERENCES artists(artist_id) ON DELETE CASCADE,
             title TEXT NOT NULL,
             genre TEXT NOT NULL,
             caption TEXT,
@@ -50,8 +51,8 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS donation_events (
             donation_id TEXT PRIMARY KEY,
-            track_id TEXT NOT NULL,
-            artist_id TEXT NOT NULL,
+            track_id TEXT NOT NULL REFERENCES tracks(track_id) ON DELETE CASCADE,
+            artist_id TEXT NOT NULL REFERENCES artists(artist_id) ON DELETE CASCADE,
             donor_user_id BIGINT,
             donor_name TEXT,
             donor_username TEXT,
@@ -62,11 +63,18 @@ def init_db():
             created_at INTEGER NOT NULL,
             confirmed_at INTEGER
         );
+        CREATE INDEX IF NOT EXISTS idx_submissions_artist_id ON submissions(artist_id);
+        CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
+        CREATE INDEX IF NOT EXISTS idx_tracks_artist_id ON tracks(artist_id);
+        CREATE INDEX IF NOT EXISTS idx_tracks_status ON tracks(status);
+        CREATE INDEX IF NOT EXISTS idx_donations_track_id ON donation_events(track_id);
+        CREATE INDEX IF NOT EXISTS idx_donations_artist_id ON donation_events(artist_id);
+        CREATE INDEX IF NOT EXISTS idx_donations_status ON donation_events(status);
+        COMMIT;
         """)
         conn.commit()
     conn.close()
 
 if __name__ == "__main__":
     init_db()
-    print("✅ Database tables initialized.")
-
+    print("✅ Database tables initialized with foreign keys and indexes.")
