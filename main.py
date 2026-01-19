@@ -8,6 +8,9 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
+import traceback
+from urllib.parse import urlparse
+import psycopg2
 
 # Load environment variables from .env file
 load_dotenv()
@@ -866,6 +869,7 @@ async def setup_bot_commands(application: Application) -> None:
 
 # -------------------- main --------------------
 def main() -> None:
+    init_db()  # <-- ensure Postgres tables and indexes before anything else
     if not TOKEN:
         raise RuntimeError("Set BOT_TOKEN environment variable first.")
     db_init()
