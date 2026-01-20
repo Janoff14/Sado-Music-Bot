@@ -6,6 +6,7 @@ from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters import Command
 
 from sado_music_bot.config import Config, get_discussion_for_genre
 from sado_music_bot.db import DB
@@ -69,10 +70,10 @@ async def on_donation_amount_selected(cb: CallbackQuery, db: DB, state: FSMConte
     await _create_donation_and_ask_note(cb, db, track_id, amount)
 
 
-@router.message(DonationAmountState.waiting_custom_amount)
+@router.message(DonationAmountState.waiting_custom_amount, F.text)
 async def on_custom_amount(m: Message, db: DB, state: FSMContext):
     """Handle custom amount input"""
-    if not m.text or not m.from_user:
+    if m.text and m.text.startswith("/"):
         return
 
     try:
@@ -129,9 +130,6 @@ async def on_custom_amount(m: Message, db: DB, state: FSMContext):
     )
 
     # Ask for note
-    await state.update_data(donation_id=donation_id)
-    await state.clear()
-
     await m.answer(
         f"✅ Amount: <b>{amount:,} so'm</b>\n\n"
         f"🎵 {track_title}\n"
@@ -464,9 +462,10 @@ async def on_add_note(cb: CallbackQuery, state: FSMContext, db: DB):
     await cb.message.reply("Send your note (max 120 chars). Links will be removed.")
 
 
-@router.message(DonationNote.waiting_note)
+@router.message(DonationNote.waiting_note, F.text)
 async def on_note_text(m: Message, state: FSMContext, bot: Bot, db: DB):
-    """Handle note text input"""
+    if m.text and m.text.startswith("/"):
+        return
     data = await state.get_data()
     donation_id = data.get("donation_id")
     card_message_id = data.get("card_message_id")
@@ -604,3 +603,13 @@ async def on_confirm_donation(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
     await cb.answer("Confirmed ✅")
     print(f"[INFO] Confirmed donation {donation_id}")
 
+
+@router.message(Command("cancel"))
+async def cmd_cancel_donation(m: Message, state: FSMContext):
+    current = await state.get_state()
+    await state.clear()
+    if current:
+        await m.answer("Cancelled.")
+    else:
+        await m.answer("Nothing to cancel.")
+    return

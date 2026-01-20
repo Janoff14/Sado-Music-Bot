@@ -254,24 +254,20 @@ async def on_profile_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
     await cb.answer()
 
 
-@router.message(ProfileEditStates.waiting_value)
+@router.message(ProfileEditStates.waiting_value, F.text)
 async def on_profile_edit_text(m: Message, db: DB, state: FSMContext):
-    if not m.text:
+    if m.text and m.text.startswith("/"):
         return
-
     data = await state.get_data()
     artist_id = data.get("edit_artist_id")
     field = data.get("edit_field")
-
     if not artist_id or not field:
         await m.answer("Session expired. Run /profile again.")
         await state.clear()
         return
-
     val = m.text.strip()
     if field == "bio" and val == "-":
         val = None
-
     await db.update_artist_field(artist_id, field, val if val else None)
     await m.answer("✅ Updated!")
     await state.clear()
@@ -310,11 +306,14 @@ async def cmd_submit(m: Message, db: DB, state: FSMContext):
 # =====================
 @router.message(OnboardingStates.waiting_name)
 async def onboard_name(m: Message, state: FSMContext):
-    name = (m.text or "").strip()
+    if not m.text:
+        return
+    if m.text.startswith("/"):
+        return
+    name = m.text.strip()
     if len(name) < 2:
         await m.answer("Name too short. Try again:")
         return
-
     await state.update_data(onb_name=name)
     await m.answer(
         "Send your payment link (Click/Payme URL):\n\n"
@@ -325,11 +324,14 @@ async def onboard_name(m: Message, state: FSMContext):
 
 @router.message(OnboardingStates.waiting_payment_link)
 async def onboard_paylink(m: Message, state: FSMContext):
-    link = (m.text or "").strip()
+    if not m.text:
+        return
+    if m.text.startswith("/"):
+        return
+    link = m.text.strip()
     if not (link.startswith("http://") or link.startswith("https://")):
         await m.answer("Please send a valid URL starting with http:// or https://")
         return
-
     await state.update_data(onb_paylink=link)
     await m.answer("Choose your default genre:", reply_markup=kb_genres("onbgenre"))
     await state.set_state(OnboardingStates.waiting_genre)
@@ -355,18 +357,19 @@ async def onboard_genre_choice(cb: CallbackQuery, state: FSMContext):
 
 @router.message(OnboardingStates.waiting_bio)
 async def onboard_bio(m: Message, db: DB, state: FSMContext):
+    if not m.text:
+        return
+    if m.text.startswith("/"):
+        return
     if not m.from_user:
         return
-
-    bio = (m.text or "").strip()
+    bio = m.text.strip()
     if bio == "-":
         bio = None
-
     data = await state.get_data()
     name = data.get("onb_name")
     link = data.get("onb_paylink")
     default_genre = data.get("onb_default_genre")
-
     artist_id = "art_" + uuid.uuid4().hex[:10]
     await db.upsert_artist(
         artist_id=artist_id,
@@ -377,10 +380,8 @@ async def onboard_bio(m: Message, db: DB, state: FSMContext):
         default_genre=default_genre,
         bio=bio
     )
-
     await state.clear()
     await state.update_data(artist_id=artist_id, default_genre=default_genre)
-
     await m.answer(
         "✅ Profile created!\n\n"
         "Now send your audio file (Music/Audio format)."
@@ -391,21 +392,18 @@ async def onboard_bio(m: Message, db: DB, state: FSMContext):
 # =====================
 # Track submission flow
 # =====================
-@router.message(SubmitStates.waiting_audio)
+@router.message(SubmitStates.waiting_audio, F.audio)
 async def sub_audio(m: Message, state: FSMContext):
-    audio = m.audio
-    if not audio:
-        await m.answer("Please send an audio file (Music/Audio format, not voice notes).")
-        return
-
-    await state.update_data(file_id=audio.file_id)
+    await state.update_data(file_id=m.audio.file_id)
     await m.answer("Send the track title:")
     await state.set_state(SubmitStates.waiting_title)
 
 
-@router.message(SubmitStates.waiting_title)
+@router.message(SubmitStates.waiting_title, F.text)
 async def sub_title(m: Message, state: FSMContext):
-    title = (m.text or "").strip()
+    if m.text and m.text.startswith("/"):
+        return
+    title = m.text.strip()
     if len(title) < 2:
         await m.answer("Title too short. Try again:")
         return
@@ -440,12 +438,13 @@ async def sub_genre_choice(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
-@router.message(SubmitStates.waiting_caption)
+@router.message(SubmitStates.waiting_caption, F.text)
 async def sub_caption(m: Message, bot: Bot, cfg: Config, db: DB, state: FSMContext):
+    if m.text and m.text.startswith("/"):
+        return
     if not m.from_user:
         return
-
-    caption = (m.text or "").strip()
+    caption = m.text.strip()
     if caption == "-":
         caption = None
 
@@ -532,6 +531,7 @@ async def cmd_cancel(m: Message, state: FSMContext):
         await m.answer("Cancelled.")
     else:
         await m.answer("Nothing to cancel.")
+    return
 
 
 # =====================
@@ -549,4 +549,3 @@ async def cmd_help(m: Message):
         "• /chatid — Get current chat ID\n\n"
         "<i>Donation buttons are in Demo mode for now.</i>"
     )
-
