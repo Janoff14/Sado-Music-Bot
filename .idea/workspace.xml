@@ -4,20 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ccc784ac-348b-4d13-9ba3-b9261746f421" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/archive_old_bot/README.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/archive_old_bot/bot.db" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/archive_old_bot/sado.db" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/sado_music_bot/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/init_db.py" beforeDir="false" afterPath="$PROJECT_DIR$/init_db.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_bot.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sado_music_bot/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/sado_music_bot/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sado_music_bot/donations/handlers.py" beforeDir="false" afterPath="$PROJECT_DIR$/sado_music_bot/donations/handlers.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sado_music_bot/music/handlers.py" beforeDir="false" afterPath="$PROJECT_DIR$/sado_music_bot/music/handlers.py" afterDir="false" />
-    </list>
+    <list default="true" id="ccc784ac-348b-4d13-9ba3-b9261746f421" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

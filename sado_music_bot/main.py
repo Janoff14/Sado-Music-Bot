@@ -130,9 +130,4 @@ async def main():
     await dp.start_polling(bot, cfg=cfg, db=db)
 
 if __name__ == "__main__":
-    init_db()
-    print("✅ Database tables initialized with foreign keys and indexes.")
     asyncio.run(main())
-else:
-    init_db()
-
