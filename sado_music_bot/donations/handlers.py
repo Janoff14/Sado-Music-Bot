@@ -1,6 +1,7 @@
 """
 Donation handlers - handles donation flow from channel buttons
 """
+import logging
 import re
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message
@@ -18,6 +19,7 @@ from sado_music_bot.texts import donation_dm_card, appreciation_public, creator_
 from .states import DonationNote
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 class DonationAmountState(StatesGroup):
@@ -128,6 +130,9 @@ async def on_custom_amount(m: Message, db: DB, state: FSMContext):
         amount=amount,
         is_anonymous=0
     )
+
+    # Clear state after creating donation
+    await state.clear()
 
     # Ask for note
     await m.answer(
@@ -364,8 +369,8 @@ async def on_toggle_anon(cb: CallbackQuery, db: DB):
             text,
             reply_markup=kb_donation_confirm(donation_id, bool(new_anon), has_note=bool(note))
         )
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to edit donation card {donation_id}: {e}")
     await cb.answer("Updated.")
 
 
@@ -435,8 +440,8 @@ async def on_note_text(m: Message, state: FSMContext, bot: Bot, db: DB):
             text=text,
             reply_markup=kb_donation_confirm(donation_id, bool(is_anon), has_note=bool(new_note))
         )
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to edit donation card after note: {e}")
 
     await m.answer("✅ Note saved.")
     await state.clear()
@@ -461,8 +466,8 @@ async def on_cancel_donation(cb: CallbackQuery, db: DB):
     await db.set_donation_status(donation_id, "CANCELED")
     try:
         await cb.message.edit_text("❌ Donation canceled.")
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to edit message after cancel: {e}")
     await cb.answer("Canceled.")
 
 
@@ -527,18 +532,10 @@ async def on_confirm_donation(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
     # 3) Update donor's confirmation card
     try:
         await cb.message.edit_text("✅ Donation confirmed (Demo). Thanks for supporting the artist!")
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to edit confirmation message: {e}")
     await cb.answer("Confirmed ✅")
     print(f"[INFO] Confirmed donation {donation_id}")
 
 
-@router.message(Command("cancel"))
-async def cmd_cancel_donation(m: Message, state: FSMContext):
-    current = await state.get_state()
-    await state.clear()
-    if current:
-        await m.answer("Cancelled.")
-    else:
-        await m.answer("Nothing to cancel.")
-    return
+# Note: /cancel command is handled by music.handlers to avoid duplicate handlers

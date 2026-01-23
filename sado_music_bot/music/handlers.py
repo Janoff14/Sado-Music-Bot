@@ -1,6 +1,7 @@
 """
 Music handlers - user-facing commands for artist profiles and track submissions
 """
+import logging
 import uuid
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
@@ -14,6 +15,7 @@ from sado_music_bot.keyboards import kb_lang, kb_genres, kb_profile_actions, kb_
 from sado_music_bot.texts import track_caption_with_payment
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 # =====================
@@ -119,8 +121,8 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
                             caption=f"🎵 <b>{title}</b>\n🎧 {genre}",
                             reply_markup=kb_track_support(track_id)
                         )
-                    except:
-                        pass  # Skip if audio can't be sent
+                    except Exception as e:
+                        logger.warning(f"Failed to send track audio {track_id}: {e}")
 
             return
 

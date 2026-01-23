@@ -2,12 +2,15 @@
 Configuration module for Sado Music Bot
 Loads settings from environment variables / .env file
 """
+import logging
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import Union
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,7 +39,7 @@ class Config:
         return os.getenv("DATABASE_URL")
 
 
-def _parse_chat_id(val: str) -> int | str:
+def _parse_chat_id(val: str) -> Union[int, str]:
     """Parse chat ID - return int if numeric, else string (for @usernames)"""
     val = val.strip()
     if not val:
@@ -55,6 +58,10 @@ def load_config() -> Config:
     admin_id = int(os.getenv("ADMIN_ID", "0"))
     if admin_id == 0:
         raise RuntimeError("ADMIN_ID is missing")
+
+    bot_username = os.getenv("BOT_USERNAME", "").strip()
+    if not bot_username:
+        logger.warning("BOT_USERNAME not set in .env - deep links may not work until bot starts")
 
     return Config(
         bot_token=bot_token,
@@ -97,14 +104,14 @@ GENRE_DISCUSSIONS = {
 }
 
 
-def get_channel_for_genre(cfg: Config, genre: str) -> int | str:
+def get_channel_for_genre(cfg: Config, genre: str) -> Union[int, str]:
     """Get channel ID/username for a genre. Returns 0 if not configured."""
     attr = GENRE_CHANNELS.get(genre, "channel_discovery")
     val = getattr(cfg, attr, "")
     return _parse_chat_id(val) if val else 0
 
 
-def get_discussion_for_genre(cfg: Config, genre: str) -> int | str:
+def get_discussion_for_genre(cfg: Config, genre: str) -> Union[int, str]:
     """Get discussion group ID/username for a genre. Returns 0 if not configured."""
     attr = GENRE_DISCUSSIONS.get(genre, "discussion_discovery")
     val = getattr(cfg, attr, "")
