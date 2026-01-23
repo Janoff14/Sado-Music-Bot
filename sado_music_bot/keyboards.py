@@ -36,7 +36,7 @@ def kb_track_post(track_id: str, artist_id: str, bot_username: str) -> InlineKey
     """Inline keyboard for channel posts - opens bot for donation & artist profile"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text="❤️ Support Artist",
+            text="❤️ Support Artist (Demo)",
             url=f"https://t.me/{bot_username}?start=donate_{track_id}"
         )],
         [InlineKeyboardButton(
@@ -81,12 +81,12 @@ def kb_profile_actions() -> InlineKeyboardMarkup:
 
 
 def kb_donation_amounts(track_id: str) -> InlineKeyboardMarkup:
-    """Amount selection for donation flow"""
+    """Amount selection for donation flow (Demo mode)"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💸 5 000 so'm", callback_data=f"donamtsel:{track_id}:5000")],
-        [InlineKeyboardButton(text="💸 10 000 so'm", callback_data=f"donamtsel:{track_id}:10000")],
-        [InlineKeyboardButton(text="💸 25 000 so'm", callback_data=f"donamtsel:{track_id}:25000")],
-        [InlineKeyboardButton(text="✏️ Custom amount", callback_data=f"donamtsel:{track_id}:custom")],
+        [InlineKeyboardButton(text="💸 5 000 so'm (Demo)", callback_data=f"donamtsel:{track_id}:5000")],
+        [InlineKeyboardButton(text="💸 10 000 so'm (Demo)", callback_data=f"donamtsel:{track_id}:10000")],
+        [InlineKeyboardButton(text="💸 25 000 so'm (Demo)", callback_data=f"donamtsel:{track_id}:25000")],
+        [InlineKeyboardButton(text="✏️ Custom amount (Demo)", callback_data=f"donamtsel:{track_id}:custom")],
         [InlineKeyboardButton(text="❌ Cancel", callback_data="doncancel")]
     ])
 
@@ -108,9 +108,9 @@ def kb_donation_anonymity(donation_id: str) -> InlineKeyboardMarkup:
 
 
 def kb_track_support(track_id: str) -> InlineKeyboardMarkup:
-    """Support button for individual tracks in artist profile"""
+    """Support button for individual tracks in artist profile (Demo mode)"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❤️ Support", callback_data=f"support_track:{track_id}")]
+        [InlineKeyboardButton(text="❤️ Support (Demo)", callback_data=f"support_track:{track_id}")]
     ])
 
 

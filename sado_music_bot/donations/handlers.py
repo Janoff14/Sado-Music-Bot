@@ -317,81 +317,10 @@ async def on_support_track_from_profile(cb: CallbackQuery, db: DB):
 
 
 # =====================
-# Legacy handlers (kept for backwards compatibility if needed)
+# Legacy handlers - REMOVED (duplicate flow)
+# The old don_amt: flow has been removed to avoid having two separate donation processes.
+# All donations now go through the deep link flow (donamtsel:)
 # =====================
-
-
-@router.callback_query(F.data.startswith("don_amt:"))
-async def on_donate_amount(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
-    """Handle donation amount button clicks from channel posts"""
-    if not cb.data or not cb.from_user:
-        return
-
-    # Parse: don_amt:<trackId>:<amount>
-    try:
-        _, track_id, amount_str = cb.data.split(":")
-        amount = int(amount_str)
-    except Exception:
-        await cb.answer("Invalid data.", show_alert=True)
-        return
-
-    # Get track info
-    track = await db.get_track(track_id)
-    if not track:
-        await cb.answer("Track not found.", show_alert=True)
-        return
-
-    # Unpack: (track_id, artist_id, title, genre, caption, file_id, channel_msg_id, disc_anchor_id, status)
-    _, artist_id, track_title, genre, _, _, _, _, status = track
-
-    if status != "ACTIVE":
-        await cb.answer("Track is no longer active.", show_alert=True)
-        return
-
-    # Get artist info
-    artist = await db.get_artist(artist_id)
-    if not artist:
-        await cb.answer("Artist not found.", show_alert=True)
-        return
-
-    # Unpack: (artist_id, tg_user_id, display_name, payment_link, profile_url, default_genre, bio)
-    _, artist_tg_id, artist_name, _, _, _, _ = artist
-
-    donor = cb.from_user
-
-    # Rate limiting
-    recent = await db.count_recent_confirmed(donor.id, track_id)
-    if recent >= cfg.max_donations_per_hour:
-        await cb.answer("Too many donations for this track. Try later.", show_alert=True)
-        return
-
-    # Get user's anonymous preference
-    anon_default = await db.get_anon_default(donor.id)
-
-    # Create donation record
-    donation_id = await db.create_donation(
-        track_id=track_id,
-        artist_id=artist_id,
-        donor_user_id=donor.id,
-        donor_name=donor.full_name,
-        donor_username=donor.username,
-        amount=amount,
-        is_anonymous=anon_default
-    )
-
-    # Build confirmation card
-    text = donation_dm_card(track_title, artist_name, amount, bool(anon_default), None)
-
-    # Send DM to donor
-    try:
-        await bot.send_message(
-            chat_id=donor.id,
-            text=text,
-            reply_markup=kb_donation_confirm(donation_id, bool(anon_default), has_note=False),
-        )
-        await cb.answer("Check your DM to confirm ✅", show_alert=True)
-    except Exception:
-        await cb.answer("Open the bot in DM first (/start), then try again.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("don_anon:"))

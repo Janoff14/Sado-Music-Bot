@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ccc784ac-348b-4d13-9ba3-b9261746f421" name="Changes" comment="" />
+    <list default="true" id="ccc784ac-348b-4d13-9ba3-b9261746f421" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/sado_music_bot/donations/handlers.py" beforeDir="false" afterPath="$PROJECT_DIR$/sado_music_bot/donations/handlers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sado_music_bot/keyboards.py" beforeDir="false" afterPath="$PROJECT_DIR$/sado_music_bot/keyboards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sado_music_bot/texts.py" beforeDir="false" afterPath="$PROJECT_DIR$/sado_music_bot/texts.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

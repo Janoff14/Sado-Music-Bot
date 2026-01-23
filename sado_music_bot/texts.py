@@ -8,7 +8,7 @@ def track_caption(title: str, artist_name: str) -> str:
     return (
         f"🎧 <b>{title}</b>\n"
         f"👤 <b>{artist_name}</b>\n\n"
-        f"<i>Support the artist — donations are in Demo mode for now.</i>"
+        f"<i>💡 Support donations are in Demo mode (coming soon!)</i>"
     )
 
 
@@ -28,13 +28,13 @@ def donation_dm_card(track_title: str, artist_name: str, amount: int, anon: bool
     note_str = note if note else "(none)"
     anon_str = "ON" if anon else "OFF"
     return (
-        f"Confirm demo donation 💸\n"
+        f"💸 <b>Donation Confirmation</b> — <i>Demo Mode</i>\n\n"
         f"Amount: <b>{amount_str} so'm</b>\n"
         f"To: <b>{artist_name}</b>\n"
         f"Track: <i>{track_title}</i>\n"
         f"Anonymous: <b>{anon_str}</b>\n"
         f"Note: <i>{note_str}</i>\n\n"
-        f"<i>Demo mode — no real payment yet.</i>"
+        f"⚠️ <i>Payment integration coming soon. No real payment will be processed.</i>"
     )
 
 
@@ -94,9 +94,10 @@ def artist_profile_text(artist_name: str, bio: str | None, total_tracks: int, tr
 def donation_start_text(track_title: str, artist_name: str) -> str:
     """Initial donation flow message"""
     return (
-        f"❤️ <b>Support Artist</b>\n\n"
+        f"❤️ <b>Support Artist</b> — <i>Demo Mode, Coming Soon</i>\n\n"
         f"🎵 Track: <i>{track_title}</i>\n"
         f"🎤 Artist: <b>{artist_name}</b>\n\n"
+        f"⚠️ <i>Payment integration coming soon. This is a demo.</i>\n\n"
         f"Choose donation amount:"
     )
 
