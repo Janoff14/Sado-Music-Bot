@@ -9,6 +9,7 @@ from sado_music_bot.config import Config, get_channel_for_genre, get_discussion_
 from sado_music_bot.db import DB
 from sado_music_bot.keyboards import kb_track_post
 from sado_music_bot.texts import track_caption_with_payment
+from sado_music_bot.i18n import t, t_channel
 
 router = Router()
 
@@ -108,14 +109,13 @@ async def on_admin_approve(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
         except:
             pass
 
-        # 6) Notify the submitter
+        # 6) Notify the submitter in their preferred language
         try:
+            submitter_lang = await db.get_lang(submitter_id)
             await bot.send_message(
                 chat_id=submitter_id,
-                text=(
-                    f"✅ Your track <b>{title}</b> has been approved and posted!\n\n"
-                    f"Track ID: <code>{track_id}</code>"
-                )
+                text=t("submitter_approved", submitter_lang),
+                parse_mode="MarkdownV2"
             )
         except Exception as e:
             print(f"[WARN] Failed to notify submitter: {e}")
@@ -168,14 +168,13 @@ async def on_admin_reject(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
     except:
         pass
 
-    # Notify the submitter
+    # Notify the submitter in their preferred language
     try:
+        submitter_lang = await db.get_lang(submitter_id)
         await bot.send_message(
             chat_id=submitter_id,
-            text=(
-                f"❌ Your track <b>{title}</b> was not approved.\n\n"
-                f"Please ensure your submission follows guidelines and try again."
-            )
+            text=t("submitter_rejected", submitter_lang),
+            parse_mode="MarkdownV2"
         )
     except Exception as e:
         print(f"[WARN] Failed to notify submitter: {e}")

@@ -271,6 +271,7 @@ class TestOnAdminReject:
         admin_callback.data = "admin_reject:sub_test123"
         mock_db.get_submission = AsyncMock(return_value=sample_submission)
         mock_db.set_submission_status = AsyncMock()
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
         await on_admin_reject(admin_callback, mock_bot, mock_config, mock_db)
 
@@ -281,7 +282,9 @@ class TestOnAdminReject:
         mock_bot.send_message.assert_called()
         notify_call = mock_bot.send_message.call_args
         assert notify_call[1]['chat_id'] == 99999  # submitter_user_id
-        assert "not approved" in notify_call[1]['text'].lower() or "rejected" in notify_call[1]['text'].lower()
+        # Accept both English and Uzbek rejection text
+        text = notify_call[1]['text'].lower()
+        assert "not approved" in text or "rejected" in text or "tasdiqlanmadi" in text or "rad" in text
 
         # Verify answer
         admin_callback.answer.assert_called_with("❌ Rejected")

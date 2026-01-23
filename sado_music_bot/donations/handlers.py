@@ -16,6 +16,7 @@ from sado_music_bot.keyboards import (
     kb_donation_anonymity, kb_track_support
 )
 from sado_music_bot.texts import donation_dm_card, appreciation_public, creator_dm, donation_start_text
+from sado_music_bot.i18n import t, t_channel
 from .states import DonationNote
 
 router = Router()

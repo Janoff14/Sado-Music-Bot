@@ -174,6 +174,18 @@ async def cmd_chatid(m: Message):
 
 
 # =====================
+# /language
+# =====================
+@router.message(Command("language"))
+async def cmd_language(m: Message, db: DB):
+    """Change language preference"""
+    if not m.from_user:
+        return
+    lang = await db.get_lang(m.from_user.id)
+    await m.answer(t("select_language", lang), reply_markup=kb_lang())
+
+
+# =====================
 # /profile
 # =====================
 @router.message(Command("profile"))
