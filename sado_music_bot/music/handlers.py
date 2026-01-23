@@ -13,7 +13,7 @@ from sado_music_bot.config import Config
 from sado_music_bot.db import DB
 from sado_music_bot.keyboards import kb_lang, kb_genres, kb_profile_actions, kb_admin_review
 from sado_music_bot.texts import track_caption_with_payment
-from sado_music_bot.i18n import t, t_channel
+from sado_music_bot.i18n import t
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -49,6 +49,7 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
         return
 
     user_id = m.from_user.id
+    lang = await db.get_lang(user_id)
 
     # Check for deep link parameters
     if m.text and len(m.text.split()) > 1:
@@ -59,20 +60,20 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
             track_id = param.replace("donate_", "")
             track = await db.get_track(track_id)
             if not track:
-                await m.answer("❌ Track not found.")
+                await m.answer(t("track_not_found", lang))
                 return
 
             # Unpack track info
             _, artist_id, track_title, genre, _, _, _, _, status = track
 
             if status != "ACTIVE":
-                await m.answer("❌ Track is no longer active.")
+                await m.answer(t("track_inactive", lang))
                 return
 
             # Get artist info
             artist = await db.get_artist(artist_id)
             if not artist:
-                await m.answer("❌ Artist not found.")
+                await m.answer(t("artist_not_found", lang))
                 return
 
             artist_name = artist[2]
@@ -93,7 +94,7 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
             artist_id = param.replace("artist_", "")
             artist = await db.get_artist(artist_id)
             if not artist:
-                await m.answer("❌ Artist not found.")
+                await m.answer(t("artist_not_found", lang))
                 return
 
             # Unpack artist info
@@ -107,7 +108,7 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
             from sado_music_bot.texts import artist_profile_text
 
             # Show artist profile
-            tracks_list = [(t[1], t[2], t[0]) for t in tracks]  # (title, genre, track_id)
+            tracks_list = [(tr[1], tr[2], tr[0]) for tr in tracks]  # (title, genre, track_id)
             profile_text = artist_profile_text(artist_name, bio, total_tracks, tracks_list)
 
             await m.answer(profile_text)
@@ -128,16 +129,12 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
             return
 
     # Default /start behavior
-    lang = await db.get_lang(user_id)
     artist = await db.get_artist_by_tg(user_id)
 
     if artist:
-        await m.answer(t("welcome", lang), parse_mode="MarkdownV2")
+        await m.answer(t("welcome_back", lang))
     else:
-        await m.answer(
-            t("select_language", lang),
-            reply_markup=kb_lang()
-        )
+        await m.answer(t("welcome_new", lang), reply_markup=kb_lang())
 
 
 @router.callback_query(F.data.startswith("lang:"))
@@ -147,14 +144,11 @@ async def on_lang_choice(cb: CallbackQuery, db: DB):
 
     lang = cb.data.split(":")[1]
     if lang not in ("uz", "ru"):
-        await cb.answer(t("invalid_callback", "uz"))
+        await cb.answer(t("invalid_language", "uz"))
         return
 
     await db.set_lang(cb.from_user.id, lang)
-    await cb.message.edit_text(
-        t("language_changed", lang),
-        parse_mode="MarkdownV2"
-    )
+    await cb.message.edit_text(t("language_saved", lang))
     await cb.answer()
 
 
@@ -188,14 +182,15 @@ async def cmd_profile(m: Message, db: DB):
     if not m.from_user:
         return
 
+    lang = await db.get_lang(m.from_user.id)
     artist = await db.get_artist_by_tg(m.from_user.id)
     if not artist:
-        await m.answer("No profile yet. Use /submit to create one.")
+        await m.answer(t("no_profile", lang))
         return
 
     artist_id, tg_user_id, display_name, payment_link, profile_url, default_genre, bio = artist
     tracks = await db.list_artist_tracks(artist_id, limit=5)
-    tracks_text = "\n".join([f"• {t[1]} ({t[2]})" for t in tracks]) or "No tracks yet"
+    tracks_text = "\n".join([f"• {tr[1]} ({tr[2]})" for tr in tracks]) or "No tracks yet"
 
     profile_text = (
         f"🎤 <b>{display_name}</b>\n"
@@ -213,9 +208,10 @@ async def on_profile_edit(cb: CallbackQuery, db: DB, state: FSMContext):
     if not cb.from_user or not cb.data:
         return
 
+    lang = await db.get_lang(cb.from_user.id)
     artist = await db.get_artist_by_tg(cb.from_user.id)
     if not artist:
-        await cb.message.edit_text("No profile found. Use /submit first.")
+        await cb.message.edit_text(t("no_profile", lang))
         await cb.answer()
         return
 
@@ -223,13 +219,13 @@ async def on_profile_edit(cb: CallbackQuery, db: DB, state: FSMContext):
     await state.update_data(edit_artist_id=artist[0], edit_field=field)
 
     if field == "default_genre":
-        await cb.message.edit_text("Choose your default genre:", reply_markup=kb_genres("profilegenre"))
+        await cb.message.edit_text(t("choose_genre", lang), reply_markup=kb_genres("profilegenre"))
         await state.set_state(ProfileEditStates.waiting_value)
     else:
         prompts = {
-            "display_name": "Send your new artist name:",
-            "payment_link": "Send your new payment link (Click/Payme URL):",
-            "bio": "Send your new bio (or '-' to clear):",
+            "display_name": t("edit_name_prompt", lang),
+            "payment_link": t("edit_payment_prompt", lang),
+            "bio": t("edit_bio_prompt", lang),
         }
         await cb.message.edit_text(prompts.get(field, "Send new value:"))
         await state.set_state(ProfileEditStates.waiting_value)
@@ -242,9 +238,10 @@ async def on_profile_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
     if not cb.data:
         return
 
+    lang = await db.get_lang(cb.from_user.id) if cb.from_user else "uz"
     choice = cb.data.split(":")[1]
     if choice == "CANCEL":
-        await cb.message.edit_text("Cancelled.")
+        await cb.message.edit_text(t("cancelled", lang))
         await state.clear()
         await cb.answer()
         return
@@ -252,7 +249,7 @@ async def on_profile_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
     data = await state.get_data()
     artist_id = data.get("edit_artist_id")
     if not artist_id:
-        await cb.message.edit_text("Session expired. Run /profile again.")
+        await cb.message.edit_text(t("session_expired", lang))
         await state.clear()
         await cb.answer()
         return
@@ -267,18 +264,20 @@ async def on_profile_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
 async def on_profile_edit_text(m: Message, db: DB, state: FSMContext):
     if m.text and m.text.startswith("/"):
         return
+
+    lang = await db.get_lang(m.from_user.id) if m.from_user else "uz"
     data = await state.get_data()
     artist_id = data.get("edit_artist_id")
     field = data.get("edit_field")
     if not artist_id or not field:
-        await m.answer("Session expired. Run /profile again.")
+        await m.answer(t("session_expired", lang))
         await state.clear()
         return
     val = m.text.strip()
     if field == "bio" and val == "-":
         val = None
     await db.update_artist_field(artist_id, field, val if val else None)
-    await m.answer("✅ Updated!")
+    await m.answer(t("updated", lang))
     await state.clear()
 
 
@@ -290,22 +289,17 @@ async def cmd_submit(m: Message, db: DB, state: FSMContext):
     if not m.from_user:
         return
 
+    lang = await db.get_lang(m.from_user.id)
     artist = await db.get_artist_by_tg(m.from_user.id)
     if not artist:
         # Start onboarding for new artists
-        await m.answer(
-            "🎤 <b>Create your artist profile</b>\n\n"
-            "Send your artist/stage name:"
-        )
+        await m.answer(t("onboard_start", lang))
         await state.set_state(OnboardingStates.waiting_name)
         return
 
     # Existing artist - go straight to audio upload
     artist_id, _, display_name, _, _, default_genre, _ = artist
-    await m.answer(
-        f"Uploading as: <b>{display_name}</b>\n\n"
-        f"Send your audio file (Music/Audio format)."
-    )
+    await m.answer(t("uploading_as", lang, name=display_name))
     await state.update_data(artist_id=artist_id, default_genre=default_genre)
     await state.set_state(SubmitStates.waiting_audio)
 
@@ -314,52 +308,54 @@ async def cmd_submit(m: Message, db: DB, state: FSMContext):
 # Onboarding flow
 # =====================
 @router.message(OnboardingStates.waiting_name)
-async def onboard_name(m: Message, state: FSMContext):
+async def onboard_name(m: Message, db: DB, state: FSMContext):
     if not m.text:
         return
     if m.text.startswith("/"):
         return
+
+    lang = await db.get_lang(m.from_user.id) if m.from_user else "uz"
     name = m.text.strip()
     if len(name) < 2:
-        await m.answer("Name too short. Try again:")
+        await m.answer(t("name_too_short", lang))
         return
     await state.update_data(onb_name=name)
-    await m.answer(
-        "Send your payment link (Click/Payme URL):\n\n"
-        "<i>This is where fans will send donations.</i>"
-    )
+    await m.answer(t("payment_prompt", lang))
     await state.set_state(OnboardingStates.waiting_payment_link)
 
 
 @router.message(OnboardingStates.waiting_payment_link)
-async def onboard_paylink(m: Message, state: FSMContext):
+async def onboard_paylink(m: Message, db: DB, state: FSMContext):
     if not m.text:
         return
     if m.text.startswith("/"):
         return
+
+    lang = await db.get_lang(m.from_user.id) if m.from_user else "uz"
     link = m.text.strip()
     if not (link.startswith("http://") or link.startswith("https://")):
-        await m.answer("Please send a valid URL starting with http:// or https://")
+        await m.answer(t("invalid_url", lang))
         return
     await state.update_data(onb_paylink=link)
-    await m.answer("Choose your default genre:", reply_markup=kb_genres("onbgenre"))
+    await m.answer(t("genre_prompt", lang), reply_markup=kb_genres("onbgenre"))
     await state.set_state(OnboardingStates.waiting_genre)
 
 
 @router.callback_query(F.data.startswith("onbgenre:"))
-async def onboard_genre_choice(cb: CallbackQuery, state: FSMContext):
+async def onboard_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
     if not cb.data:
         return
 
+    lang = await db.get_lang(cb.from_user.id) if cb.from_user else "uz"
     choice = cb.data.split(":")[1]
     if choice == "CANCEL":
-        await cb.message.edit_text("Cancelled.")
+        await cb.message.edit_text(t("cancelled", lang))
         await state.clear()
         await cb.answer()
         return
 
     await state.update_data(onb_default_genre=choice)
-    await cb.message.edit_text("Optional: send a short bio (1-2 lines), or '-' to skip.")
+    await cb.message.edit_text(t("bio_prompt", lang))
     await state.set_state(OnboardingStates.waiting_bio)
     await cb.answer()
 
@@ -372,6 +368,8 @@ async def onboard_bio(m: Message, db: DB, state: FSMContext):
         return
     if not m.from_user:
         return
+
+    lang = await db.get_lang(m.from_user.id)
     bio = m.text.strip()
     if bio == "-":
         bio = None
@@ -391,10 +389,7 @@ async def onboard_bio(m: Message, db: DB, state: FSMContext):
     )
     await state.clear()
     await state.update_data(artist_id=artist_id, default_genre=default_genre)
-    await m.answer(
-        "✅ Profile created!\n\n"
-        "Now send your audio file (Music/Audio format)."
-    )
+    await m.answer(t("profile_created", lang))
     await state.set_state(SubmitStates.waiting_audio)
 
 
@@ -402,19 +397,22 @@ async def onboard_bio(m: Message, db: DB, state: FSMContext):
 # Track submission flow
 # =====================
 @router.message(SubmitStates.waiting_audio, F.audio)
-async def sub_audio(m: Message, state: FSMContext):
+async def sub_audio(m: Message, db: DB, state: FSMContext):
+    lang = await db.get_lang(m.from_user.id) if m.from_user else "uz"
     await state.update_data(file_id=m.audio.file_id)
-    await m.answer("Send the track title:")
+    await m.answer(t("send_title", lang))
     await state.set_state(SubmitStates.waiting_title)
 
 
 @router.message(SubmitStates.waiting_title, F.text)
-async def sub_title(m: Message, state: FSMContext):
+async def sub_title(m: Message, db: DB, state: FSMContext):
     if m.text and m.text.startswith("/"):
         return
+
+    lang = await db.get_lang(m.from_user.id) if m.from_user else "uz"
     title = m.text.strip()
     if len(title) < 2:
-        await m.answer("Title too short. Try again:")
+        await m.answer(t("title_too_short", lang))
         return
 
     await state.update_data(title=title)
@@ -422,27 +420,28 @@ async def sub_title(m: Message, state: FSMContext):
     default_genre = data.get("default_genre")
 
     if default_genre:
-        await m.answer(f"Choose genre (default: {default_genre}):", reply_markup=kb_genres("subgenre"))
+        await m.answer(t("choose_genre_default", lang, genre=default_genre), reply_markup=kb_genres("subgenre"))
     else:
-        await m.answer("Choose genre:", reply_markup=kb_genres("subgenre"))
+        await m.answer(t("choose_genre", lang), reply_markup=kb_genres("subgenre"))
 
     await state.set_state(SubmitStates.waiting_genre)
 
 
 @router.callback_query(F.data.startswith("subgenre:"))
-async def sub_genre_choice(cb: CallbackQuery, state: FSMContext):
+async def sub_genre_choice(cb: CallbackQuery, db: DB, state: FSMContext):
     if not cb.data:
         return
 
+    lang = await db.get_lang(cb.from_user.id) if cb.from_user else "uz"
     choice = cb.data.split(":")[1]
     if choice == "CANCEL":
-        await cb.message.edit_text("Cancelled.")
+        await cb.message.edit_text(t("cancelled", lang))
         await state.clear()
         await cb.answer()
         return
 
     await state.update_data(genre=choice)
-    await cb.message.edit_text("Optional: send a short caption/description, or '-' to skip.")
+    await cb.message.edit_text(t("caption_prompt", lang))
     await state.set_state(SubmitStates.waiting_caption)
     await cb.answer()
 
@@ -453,6 +452,8 @@ async def sub_caption(m: Message, bot: Bot, cfg: Config, db: DB, state: FSMConte
         return
     if not m.from_user:
         return
+
+    lang = await db.get_lang(m.from_user.id)
     caption = m.text.strip()
     if caption == "-":
         caption = None
@@ -464,13 +465,13 @@ async def sub_caption(m: Message, bot: Bot, cfg: Config, db: DB, state: FSMConte
     genre = data.get("genre")
 
     if not all([artist_id, file_id, title, genre]):
-        await m.answer("Something went wrong. Please try /submit again.")
+        await m.answer(t("something_wrong", lang))
         await state.clear()
         return
 
     artist = await db.get_artist(artist_id)
     if not artist:
-        await m.answer("Artist not found. Please try /submit again.")
+        await m.answer(t("something_wrong", lang))
         await state.clear()
         return
 
@@ -515,16 +516,11 @@ async def sub_caption(m: Message, bot: Bot, cfg: Config, db: DB, state: FSMConte
         except Exception as e:
             print(f"[ERROR] Failed to send to admin: {e}")
 
-        await m.answer(
-            f"✅ <b>Submission received!</b>\n\n"
-            f"Your track <b>{title}</b> has been sent for review.\n"
-            f"You'll be notified once it's approved.\n\n"
-            f"Submission ID: <code>{submission_id}</code>"
-        )
+        await m.answer(t("submission_received", lang, title=title, id=submission_id))
 
     except Exception as e:
         print(f"[ERROR] Failed to create submission: {e}")
-        await m.answer(f"❌ Failed to submit: {e}")
+        await m.answer(t("submission_failed", lang, error=str(e)))
 
     await state.clear()
 
@@ -539,7 +535,10 @@ async def cmd_cancel(m: Message, db: DB, state: FSMContext):
     lang = await db.get_lang(m.from_user.id)
     current = await state.get_state()
     await state.clear()
-    await m.answer(t("cancelled", lang), parse_mode="MarkdownV2")
+    if current:
+        await m.answer(t("cancelled", lang))
+    else:
+        await m.answer(t("nothing_to_cancel", lang))
     return
 
 
@@ -551,4 +550,5 @@ async def cmd_help(m: Message, db: DB):
     if not m.from_user:
         return
     lang = await db.get_lang(m.from_user.id)
-    await m.answer(t("help_text", lang), parse_mode="MarkdownV2")
+    await m.answer(t("help_text", lang))
+

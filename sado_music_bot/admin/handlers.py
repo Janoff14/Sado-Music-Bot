@@ -114,8 +114,7 @@ async def on_admin_approve(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
             submitter_lang = await db.get_lang(submitter_id)
             await bot.send_message(
                 chat_id=submitter_id,
-                text=t("submitter_approved", submitter_lang),
-                parse_mode="MarkdownV2"
+                text=t("submitter_approved", submitter_lang, title=title)
             )
         except Exception as e:
             print(f"[WARN] Failed to notify submitter: {e}")
@@ -173,8 +172,7 @@ async def on_admin_reject(cb: CallbackQuery, bot: Bot, cfg: Config, db: DB):
         submitter_lang = await db.get_lang(submitter_id)
         await bot.send_message(
             chat_id=submitter_id,
-            text=t("submitter_rejected", submitter_lang),
-            parse_mode="MarkdownV2"
+            text=t("submitter_rejected", submitter_lang, title=title)
         )
     except Exception as e:
         print(f"[WARN] Failed to notify submitter: {e}")

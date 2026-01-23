@@ -161,8 +161,8 @@ class TestCmdStart:
         mock_message.answer.assert_called()
         call_args = mock_message.answer.call_args
         text = call_args[0][0]
-        # Accept both English and Uzbek language selection prompt
-        assert "Welcome" in text or "Sado Music" in text or "tanlang" in text or "Выберите" in text
+        # Should show language selection or welcome for new users
+        assert "tanlang" in text or "Выберите" in text or "Sado Music" in text
         # Should have language selection keyboard
         assert call_args[1].get('reply_markup') is not None
 
@@ -176,8 +176,8 @@ class TestCmdStart:
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        # Accept both English and Uzbek welcome message
-        assert "/submit" in text or "/profile" in text or "Salom" in text or "SadoMusicBot" in text
+        # Should show welcome back message with commands
+        assert "/submit" in text or "/profile" in text or "Xush kelibsiz" in text
 
     @pytest.mark.asyncio
     async def test_donate_deep_link_shows_amounts(self, mock_message, mock_db, mock_config, sample_track, sample_artist):
@@ -198,12 +198,14 @@ class TestCmdStart:
         """Test donate deep link with unknown track shows error"""
         mock_message.text = "/start donate_unknown"
         mock_db.get_track = AsyncMock(return_value=None)
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
         await cmd_start(mock_message, mock_db, mock_config)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        assert "not found" in text.lower()
+        # Accept both English and Uzbek
+        assert "not found" in text.lower() or "topilmadi" in text.lower()
 
     @pytest.mark.asyncio
     async def test_artist_deep_link_shows_profile(self, mock_message, mock_db, mock_config, sample_artist):
@@ -224,12 +226,14 @@ class TestCmdStart:
         """Test artist deep link with unknown artist shows error"""
         mock_message.text = "/start artist_unknown"
         mock_db.get_artist = AsyncMock(return_value=None)
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
         await cmd_start(mock_message, mock_db, mock_config)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        assert "not found" in text.lower()
+        # Accept both English and Uzbek
+        assert "not found" in text.lower() or "topilmadi" in text.lower()
 
     @pytest.mark.asyncio
     async def test_handles_missing_from_user(self, mock_message, mock_db, mock_config):
@@ -278,18 +282,21 @@ class TestCmdSubmit:
     async def test_new_artist_starts_onboarding(self, mock_message, mock_db, mock_state):
         """Test new artist starts onboarding flow"""
         mock_db.get_artist_by_tg = AsyncMock(return_value=None)
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
         await cmd_submit(mock_message, mock_db, mock_state)
 
         mock_state.set_state.assert_called_with(OnboardingStates.waiting_name)
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        assert "artist" in text.lower() or "name" in text.lower()
+        # Accept both English and Uzbek
+        assert "artist" in text.lower() or "name" in text.lower() or "profil" in text.lower() or "ijrochi" in text.lower()
 
     @pytest.mark.asyncio
     async def test_existing_artist_goes_to_audio(self, mock_message, mock_db, mock_state, sample_artist):
         """Test existing artist goes straight to audio upload"""
         mock_db.get_artist_by_tg = AsyncMock(return_value=sample_artist)
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
         await cmd_submit(mock_message, mock_db, mock_state)
 
@@ -313,12 +320,12 @@ class TestCmdCancel:
         mock_state.clear.assert_called()
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        # Accept both English and Uzbek
-        assert "Cancelled" in text or "Bekor" in text or "cancelled" in text.lower()
+        # Should show cancelled message
+        assert "Bekor" in text or "cancel" in text.lower() or "Отменено" in text
 
     @pytest.mark.asyncio
     async def test_cancel_without_active_state(self, mock_message, mock_db, mock_state):
-        """Test cancel without active state shows cancelled message"""
+        """Test cancel without active state shows nothing to cancel message"""
         mock_state.get_state = AsyncMock(return_value=None)
         mock_db.get_lang = AsyncMock(return_value="uz")
 
@@ -327,8 +334,8 @@ class TestCmdCancel:
         mock_state.clear.assert_called()
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        # Accept both English and Uzbek
-        assert "cancel" in text.lower() or "Bekor" in text
+        # Should show "nothing to cancel" message
+        assert "cancel" in text.lower() or "Bekor" in text or "yo'q" in text
 
 
 class TestCmdHelp:
@@ -343,8 +350,8 @@ class TestCmdHelp:
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        # Accept Uzbek help text
-        assert "/start" in text or "/help" in text or "Buyruqlar" in text or "Список" in text
+        # Help text should mention commands
+        assert "/submit" in text or "/profile" in text or "Sado Music" in text
 
 
 class TestCmdChatId:
@@ -402,43 +409,47 @@ class TestOnboardingFlow:
     """Tests for artist onboarding flow"""
 
     @pytest.mark.asyncio
-    async def test_onboard_name_short_name_rejected(self, mock_message, mock_state):
+    async def test_onboard_name_short_name_rejected(self, mock_message, mock_db, mock_state):
         """Test names shorter than 2 chars are rejected"""
         mock_message.text = "A"
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await onboard_name(mock_message, mock_state)
+        await onboard_name(mock_message, mock_db, mock_state)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        assert "short" in text.lower()
+        assert "short" in text.lower() or "qisqa" in text.lower() or "короткое" in text.lower()
 
     @pytest.mark.asyncio
-    async def test_onboard_name_valid_proceeds(self, mock_message, mock_state):
+    async def test_onboard_name_valid_proceeds(self, mock_message, mock_db, mock_state):
         """Test valid name proceeds to payment link step"""
         mock_message.text = "Test Artist"
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await onboard_name(mock_message, mock_state)
+        await onboard_name(mock_message, mock_db, mock_state)
 
         mock_state.update_data.assert_called_with(onb_name="Test Artist")
         mock_state.set_state.assert_called_with(OnboardingStates.waiting_payment_link)
 
     @pytest.mark.asyncio
-    async def test_onboard_paylink_invalid_url_rejected(self, mock_message, mock_state):
+    async def test_onboard_paylink_invalid_url_rejected(self, mock_message, mock_db, mock_state):
         """Test invalid URLs are rejected"""
         mock_message.text = "not a url"
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await onboard_paylink(mock_message, mock_state)
+        await onboard_paylink(mock_message, mock_db, mock_state)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        assert "http" in text.lower() or "url" in text.lower()
+        assert "http" in text.lower() or "url" in text.lower() or "havola" in text.lower()
 
     @pytest.mark.asyncio
-    async def test_onboard_paylink_valid_proceeds(self, mock_message, mock_state):
+    async def test_onboard_paylink_valid_proceeds(self, mock_message, mock_db, mock_state):
         """Test valid URL proceeds to genre step"""
         mock_message.text = "https://pay.me/test"
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await onboard_paylink(mock_message, mock_state)
+        await onboard_paylink(mock_message, mock_db, mock_state)
 
         mock_state.update_data.assert_called_with(onb_paylink="https://pay.me/test")
         mock_state.set_state.assert_called_with(OnboardingStates.waiting_genre)
@@ -448,34 +459,37 @@ class TestSubmissionFlow:
     """Tests for track submission flow"""
 
     @pytest.mark.asyncio
-    async def test_sub_audio_stores_file_id(self, mock_message, mock_state):
+    async def test_sub_audio_stores_file_id(self, mock_message, mock_db, mock_state):
         """Test audio upload stores file ID"""
         mock_message.audio = MagicMock()
         mock_message.audio.file_id = "file_abc123"
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await sub_audio(mock_message, mock_state)
+        await sub_audio(mock_message, mock_db, mock_state)
 
         mock_state.update_data.assert_called_with(file_id="file_abc123")
         mock_state.set_state.assert_called_with(SubmitStates.waiting_title)
 
     @pytest.mark.asyncio
-    async def test_sub_title_short_title_rejected(self, mock_message, mock_state):
+    async def test_sub_title_short_title_rejected(self, mock_message, mock_db, mock_state):
         """Test titles shorter than 2 chars are rejected"""
         mock_message.text = "A"
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await sub_title(mock_message, mock_state)
+        await sub_title(mock_message, mock_db, mock_state)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
-        assert "short" in text.lower()
+        assert "short" in text.lower() or "qisqa" in text.lower() or "короткое" in text.lower()
 
     @pytest.mark.asyncio
-    async def test_sub_title_valid_proceeds(self, mock_message, mock_state):
+    async def test_sub_title_valid_proceeds(self, mock_message, mock_db, mock_state):
         """Test valid title proceeds to genre step"""
         mock_message.text = "My Great Song"
         mock_state.get_data = AsyncMock(return_value={"default_genre": "Pop"})
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await sub_title(mock_message, mock_state)
+        await sub_title(mock_message, mock_db, mock_state)
 
         mock_state.update_data.assert_called_with(title="My Great Song")
         mock_state.set_state.assert_called_with(SubmitStates.waiting_genre)

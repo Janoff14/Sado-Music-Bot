@@ -13,23 +13,23 @@ class TestTranslationFunction:
 
     def test_returns_uzbek_by_default(self):
         """Default language should be Uzbek"""
-        result = t("welcome")
-        assert "Salom" in result or "SadoMusicBot" in result
+        result = t("welcome_back")
+        assert "Xush kelibsiz" in result
 
     def test_returns_uzbek_when_specified(self):
         """Explicitly specifying 'uz' should return Uzbek"""
-        result = t("welcome", "uz")
-        assert "Salom" in result
+        result = t("welcome_back", "uz")
+        assert "Xush kelibsiz" in result
 
     def test_returns_russian_when_specified(self):
         """Specifying 'ru' should return Russian"""
-        result = t("welcome", "ru")
-        assert "Привет" in result
+        result = t("welcome_back", "ru")
+        assert "С возвращением" in result
 
     def test_unknown_language_falls_back_to_default(self):
         """Unknown language code should fall back to default (Uzbek)"""
-        result = t("welcome", "fr")
-        assert "Salom" in result
+        result = t("welcome_back", "fr")
+        assert "Xush kelibsiz" in result
 
     def test_returns_key_if_not_found(self):
         """Missing key should return the key itself"""
@@ -38,8 +38,18 @@ class TestTranslationFunction:
 
     def test_none_language_uses_default(self):
         """None language should use default"""
-        result = t("welcome", None)
-        assert "Salom" in result
+        result = t("welcome_back", None)
+        assert "Xush kelibsiz" in result
+
+    def test_format_arguments(self):
+        """Should support format arguments"""
+        result = t("uploading_as", "uz", name="TestArtist")
+        assert "TestArtist" in result
+
+    def test_format_arguments_russian(self):
+        """Format arguments should work in Russian too"""
+        result = t("uploading_as", "ru", name="TestArtist")
+        assert "TestArtist" in result
 
 
 class TestChannelTranslation:
@@ -47,8 +57,8 @@ class TestChannelTranslation:
 
     def test_always_returns_uzbek(self):
         """Channel translations should always be Uzbek"""
-        result = t_channel("welcome")
-        assert "Salom" in result
+        result = t_channel("welcome_back")
+        assert "Xush kelibsiz" in result
 
     def test_channel_language_is_uzbek(self):
         """CHANNEL_LANGUAGE constant should be 'uz'"""
@@ -121,20 +131,19 @@ class TestTranslationKeys:
     """Tests for specific translation keys"""
 
     @pytest.mark.parametrize("key", [
-        "unauthorized",
-        "unknown_error",
-        "not_found",
-        "cancelled",
-        "done",
+        "welcome_back",
+        "welcome_new",
         "select_language",
-        "language_changed",
-        "welcome",
+        "language_saved",
+        "track_not_found",
+        "artist_not_found",
+        "no_profile",
+        "cancelled",
         "help_text",
-        "submission_not_found",
+        "onboard_start",
+        "profile_created",
         "submitter_approved",
         "submitter_rejected",
-        "btn_approve",
-        "btn_reject",
     ])
     def test_key_exists_in_uzbek(self, key):
         """All essential keys should exist in Uzbek"""
@@ -142,20 +151,19 @@ class TestTranslationKeys:
         assert result != key  # Should return translation, not the key itself
 
     @pytest.mark.parametrize("key", [
-        "unauthorized",
-        "unknown_error",
-        "not_found",
-        "cancelled",
-        "done",
+        "welcome_back",
+        "welcome_new",
         "select_language",
-        "language_changed",
-        "welcome",
+        "language_saved",
+        "track_not_found",
+        "artist_not_found",
+        "no_profile",
+        "cancelled",
         "help_text",
-        "submission_not_found",
+        "onboard_start",
+        "profile_created",
         "submitter_approved",
         "submitter_rejected",
-        "btn_approve",
-        "btn_reject",
     ])
     def test_key_exists_in_russian(self, key):
         """All essential keys should exist in Russian"""
@@ -163,17 +171,26 @@ class TestTranslationKeys:
         assert result != key  # Should return translation, not the key itself
 
 
-class TestMarkdownV2Escaping:
-    """Tests for MarkdownV2 escaping in translations"""
+class TestHTMLFormatting:
+    """Tests to ensure translations use HTML formatting"""
 
-    def test_uzbek_texts_are_escaped(self):
-        """Uzbek texts should have MarkdownV2 escaping"""
-        # Texts with periods should have escaped periods
-        result = t("unauthorized", "uz")
-        assert "\\." in result
+    def test_uzbek_texts_use_html(self):
+        """Uzbek texts should use HTML tags, not MarkdownV2"""
+        result = t("help_text", "uz")
+        assert "<b>" in result or "<i>" in result
 
-    def test_russian_texts_are_escaped(self):
-        """Russian texts should have MarkdownV2 escaping"""
-        result = t("unauthorized", "ru")
-        assert "\\." in result
+    def test_russian_texts_use_html(self):
+        """Russian texts should use HTML tags, not MarkdownV2"""
+        result = t("help_text", "ru")
+        assert "<b>" in result or "<i>" in result
+
+    def test_no_markdownv2_escaping(self):
+        """Texts should not have MarkdownV2 escape characters"""
+        for lang in ["uz", "ru"]:
+            for key in LANGUAGES[lang]:
+                text = LANGUAGES[lang][key]
+                # Check no excessive backslash escaping
+                assert "\\." not in text, f"Key '{key}' in '{lang}' has MarkdownV2 escaping"
+                assert "\\!" not in text, f"Key '{key}' in '{lang}' has MarkdownV2 escaping"
+                assert "\\-" not in text, f"Key '{key}' in '{lang}' has MarkdownV2 escaping"
 
