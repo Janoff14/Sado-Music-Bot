@@ -13,6 +13,7 @@ from sado_music_bot.config import Config
 from sado_music_bot.db import DB
 from sado_music_bot.keyboards import kb_lang, kb_genres, kb_profile_actions, kb_admin_review
 from sado_music_bot.texts import track_caption_with_payment
+from sado_music_bot.i18n import t, t_channel
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -127,20 +128,14 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
             return
 
     # Default /start behavior
+    lang = await db.get_lang(user_id)
     artist = await db.get_artist_by_tg(user_id)
 
     if artist:
-        await m.answer(
-            "✅ Welcome back!\n\n"
-            "• /submit — upload a new track\n"
-            "• /profile — view/edit your profile\n"
-            "• /cancel — cancel current operation"
-        )
+        await m.answer(t("welcome", lang), parse_mode="MarkdownV2")
     else:
         await m.answer(
-            "🎵 <b>Welcome to Sado Music!</b>\n\n"
-            "Share your music with the world and receive support from fans.\n\n"
-            "Choose your language / Tilni tanlang:",
+            t("select_language", lang),
             reply_markup=kb_lang()
         )
 
@@ -152,13 +147,13 @@ async def on_lang_choice(cb: CallbackQuery, db: DB):
 
     lang = cb.data.split(":")[1]
     if lang not in ("uz", "ru"):
-        await cb.answer("Invalid language")
+        await cb.answer(t("invalid_callback", "uz"))
         return
 
     await db.set_lang(cb.from_user.id, lang)
     await cb.message.edit_text(
-        "✅ Language saved!\n\n"
-        "Use /submit to upload your first track."
+        t("language_changed", lang),
+        parse_mode="MarkdownV2"
     )
     await cb.answer()
 
@@ -538,13 +533,13 @@ async def sub_caption(m: Message, bot: Bot, cfg: Config, db: DB, state: FSMConte
 # /cancel
 # =====================
 @router.message(Command("cancel"))
-async def cmd_cancel(m: Message, state: FSMContext):
+async def cmd_cancel(m: Message, db: DB, state: FSMContext):
+    if not m.from_user:
+        return
+    lang = await db.get_lang(m.from_user.id)
     current = await state.get_state()
     await state.clear()
-    if current:
-        await m.answer("Cancelled.")
-    else:
-        await m.answer("Nothing to cancel.")
+    await m.answer(t("cancelled", lang), parse_mode="MarkdownV2")
     return
 
 
@@ -552,14 +547,8 @@ async def cmd_cancel(m: Message, state: FSMContext):
 # Help/fallback
 # =====================
 @router.message(Command("help"))
-async def cmd_help(m: Message):
-    await m.answer(
-        "🎵 <b>Sado Music Bot</b>\n\n"
-        "<b>Commands:</b>\n"
-        "• /start — Start the bot\n"
-        "• /submit — Submit a new track\n"
-        "• /profile — View/edit your artist profile\n"
-        "• /cancel — Cancel current operation\n"
-        "• /chatid — Get current chat ID\n\n"
-        "<i>Donation buttons are in Demo mode for now.</i>"
-    )
+async def cmd_help(m: Message, db: DB):
+    if not m.from_user:
+        return
+    lang = await db.get_lang(m.from_user.id)
+    await m.answer(t("help_text", lang), parse_mode="MarkdownV2")
