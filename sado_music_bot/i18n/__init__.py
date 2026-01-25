@@ -12,7 +12,13 @@ UZ: Dict[str, str] = {
     "welcome_back": "✅ Xush kelibsiz!\n\n• /submit — yangi trek yuklash\n• /profile — profilingizni ko'rish/tahrirlash\n• /language — tilni o'zgartirish\n• /cancel — bekor qilish",
     "welcome_new": "🎵 <b>Sado Music</b>ga xush kelibsiz!\n\nMusiqangizni dunyo bilan baham ko'ring.\n\nTilni tanlang / Выберите язык:",
     "select_language": "🌐 Tilni tanlang / Выберите язык:",
-    "language_saved": "✅ Til saqlandi!\n\nBirinchi trekingizni yuklash uchun /submit bosing.",
+    "language_saved": "✅ Til saqlandi!",
+
+    # User type selection
+    "choose_user_type": "🎭 <b>Siz kimsiz?</b>\n\nIjrochi bo'lsangiz, profil yaratib qo'shiqlaringizni yuklay olasiz.\nTinglovchi bo'lsangiz, bizning kanallarda musiqa topasiz.",
+    "user_type_artist": "🎤 Ijrochi",
+    "user_type_listener": "🎧 Tinglovchi",
+    "listener_welcome": "🎧 <b>Xush kelibsiz, tinglovchi!</b>\n\nQuyida bizning kanallarimiz ro'yxati. Ularga obuna bo'ling va eng yaxshi musiqani toping!\n\nBuyruqlar:\n• /kanallar — kanallar ro'yxati\n• /qidiruv — ijrochi yoki qo'shiq qidirish\n• /yordam — barcha buyruqlar",
 
     # Errors
     "track_not_found": "❌ Trek topilmadi.",
@@ -58,7 +64,21 @@ UZ: Dict[str, str] = {
     # Cancel & Help
     "cancelled": "Bekor qilindi.",
     "nothing_to_cancel": "Bekor qiladigan narsa yo'q.",
-    "help_text": "🎵 <b>Sado Music Bot</b>\n\n<b>Buyruqlar:</b>\n• /start — Botni ishga tushirish\n• /submit — Yangi trek yuborish\n• /profile — Ijrochi profilini ko'rish/tahrirlash\n• /language — Tilni o'zgartirish\n• /cancel — Joriy amalni bekor qilish\n• /chatid — Joriy chat ID ni olish\n\n<i>Donation tugmalari hozircha Demo rejimida.</i>",
+    "help_text": "🎵 <b>Sado Music Bot - Yordam</b>\n\n<b>Asosiy buyruqlar:</b>\n• /start — Botni ishga tushirish\n• /kanallar — Kanallar ro'yxati\n• /qidiruv — Ijrochi yoki qo'shiq qidirish\n• /yordam — Bu yordam xabari\n\n<b>Ijrochilar uchun:</b>\n• /submit — Yangi trek yuborish\n• /profile — Profil ko'rish/tahrirlash\n\n<b>Boshqa:</b>\n• /language — Tilni o'zgartirish\n• /cancel — Bekor qilish\n• /chatid — Chat ID olish\n\n<i>Donat tugmalari hozircha Demo rejimida.</i>",
+
+    # Channels
+    "channels_list_header": "📺 <b>Bizning kanallar</b>\n\nQuyidagi kanallarda eng yaxshi musiqani topishingiz mumkin:",
+    "no_channels": "Hozircha kanallar mavjud emas.",
+    "channel_item": "🎵 <b>{name}</b>\n{description}\n🔗 {link}\n",
+
+    # Search
+    "search_prompt": "🔍 <b>Qidiruv</b>\n\nIjrochi ismini yoki qo'shiq nomini yuboring:",
+    "search_no_results": "❌ Hech narsa topilmadi. Boshqa so'z bilan urinib ko'ring.",
+    "search_results_header": "🔍 <b>Qidiruv natijalari:</b>\n",
+    "search_artist_item": "🎤 <b>{name}</b>{bio}\n",
+    "search_track_item": "🎵 <b>{title}</b> — {artist}\n",
+    "search_view_artist": "👤 Profil",
+    "search_listen": "🎧 Tinglash",
 }
 
 # Russian translations
@@ -67,7 +87,13 @@ RU: Dict[str, str] = {
     "welcome_back": "✅ С возвращением!\n\n• /submit — загрузить новый трек\n• /profile — просмотр/редактирование профиля\n• /language — сменить язык\n• /cancel — отмена",
     "welcome_new": "🎵 Добро пожаловать в <b>Sado Music</b>!\n\nДелитесь своей музыкой с миром.\n\nTilni tanlang / Выберите язык:",
     "select_language": "🌐 Tilni tanlang / Выберите язык:",
-    "language_saved": "✅ Язык сохранён!\n\nНажмите /submit чтобы загрузить первый трек.",
+    "language_saved": "✅ Язык сохранён!",
+
+    # User type selection
+    "choose_user_type": "🎭 <b>Кто вы?</b>\n\nЕсли вы артист, можете создать профиль и загружать свои треки.\nЕсли слушатель — найдёте музыку в наших каналах.",
+    "user_type_artist": "🎤 Артист",
+    "user_type_listener": "🎧 Слушатель",
+    "listener_welcome": "🎧 <b>Добро пожаловать, слушатель!</b>\n\nНиже список наших каналов. Подпишитесь и найдите лучшую музыку!\n\nКоманды:\n• /kanaly — список каналов\n• /poisk — поиск артиста или трека\n• /pomosh — все команды",
 
     # Errors
     "track_not_found": "❌ Трек не найден.",
@@ -113,7 +139,21 @@ RU: Dict[str, str] = {
     # Cancel & Help
     "cancelled": "Отменено.",
     "nothing_to_cancel": "Нечего отменять.",
-    "help_text": "🎵 <b>Sado Music Bot</b>\n\n<b>Команды:</b>\n• /start — Запустить бота\n• /submit — Загрузить новый трек\n• /profile — Просмотр/редактирование профиля\n• /language — Сменить язык\n• /cancel — Отменить текущую операцию\n• /chatid — Получить ID чата\n\n<i>Кнопки донатов пока в демо-режиме.</i>",
+    "help_text": "🎵 <b>Sado Music Bot - Помощь</b>\n\n<b>Основные команды:</b>\n• /start — Запустить бота\n• /kanaly — Список каналов\n• /poisk — Поиск артиста или трека\n• /pomosh — Это сообщение помощи\n\n<b>Для артистов:</b>\n• /submit — Загрузить новый трек\n• /profile — Просмотр/редактирование профиля\n\n<b>Прочее:</b>\n• /language — Сменить язык\n• /cancel — Отменить текущую операцию\n• /chatid — Получить ID чата\n\n<i>Кнопки донатов пока в демо-режиме.</i>",
+
+    # Channels
+    "channels_list_header": "📺 <b>Наши каналы</b>\n\nВ этих каналах вы найдёте лучшую музыку:",
+    "no_channels": "Пока нет каналов.",
+    "channel_item": "🎵 <b>{name}</b>\n{description}\n🔗 {link}\n",
+
+    # Search
+    "search_prompt": "🔍 <b>Поиск</b>\n\nОтправьте имя артиста или название трека:",
+    "search_no_results": "❌ Ничего не найдено. Попробуйте другой запрос.",
+    "search_results_header": "🔍 <b>Результаты поиска:</b>\n",
+    "search_artist_item": "🎤 <b>{name}</b>{bio}\n",
+    "search_track_item": "🎵 <b>{title}</b> — {artist}\n",
+    "search_view_artist": "👤 Профиль",
+    "search_listen": "🎧 Слушать",
 }
 
 # All languages

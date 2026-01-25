@@ -114,3 +114,59 @@ def kb_track_support(track_id: str) -> InlineKeyboardMarkup:
     ])
 
 
+def kb_user_type(lang: str = "uz") -> InlineKeyboardMarkup:
+    """User type selection keyboard (artist or listener)"""
+    if lang == "ru":
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎤 Артист", callback_data="usertype:artist")],
+            [InlineKeyboardButton(text="🎧 Слушатель", callback_data="usertype:listener")],
+        ])
+    else:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎤 Ijrochi", callback_data="usertype:artist")],
+            [InlineKeyboardButton(text="🎧 Tinglovchi", callback_data="usertype:listener")],
+        ])
+
+
+def kb_search_result_artist(artist_id: str, bot_username: str, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Button to view artist profile from search results"""
+    text = "👤 Профиль" if lang == "ru" else "👤 Profil"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=text,
+            url=f"https://t.me/{bot_username}?start=artist_{artist_id}"
+        )]
+    ])
+
+
+def kb_search_result_track(track_id: str, artist_id: str, bot_username: str, channel_username: str = None,
+                           channel_msg_id: int = None, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Buttons for track search results - donate and view artist"""
+    donate_text = "❤️ Донат" if lang == "ru" else "❤️ Donat"
+    profile_text = "👤 Профиль" if lang == "ru" else "👤 Profil"
+    listen_text = "🎧 Слушать" if lang == "ru" else "🎧 Tinglash"
+
+    buttons = []
+
+    # If we have channel info, add listen button
+    if channel_username and channel_msg_id:
+        buttons.append([InlineKeyboardButton(
+            text=listen_text,
+            url=f"https://t.me/{channel_username}/{channel_msg_id}"
+        )])
+
+    # Donate and profile buttons
+    buttons.append([
+        InlineKeyboardButton(
+            text=donate_text,
+            url=f"https://t.me/{bot_username}?start=donate_{track_id}"
+        ),
+        InlineKeyboardButton(
+            text=profile_text,
+            url=f"https://t.me/{bot_username}?start=artist_{artist_id}"
+        )
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+

@@ -4,21 +4,53 @@ Text templates for Sado Music Bot
 
 
 def track_caption(title: str, artist_name: str) -> str:
-    """Simple track caption for channel posts"""
+    """Simple track caption for channel posts (Uzbek)"""
     return (
         f"🎧 <b>{title}</b>\n"
-        f"👤 <b>{artist_name}</b>\n\n"
-        f"<i>💡 Support donations are in Demo mode (coming soon!)</i>"
+        f"👤 Ijrochi: <b>{artist_name}</b>\n\n"
+        f"<i>💡 Donat rejimi demo (tez orada!)</i>"
     )
 
 
-def track_caption_with_payment(title: str, artist_name: str, payment_link: str | None, caption: str | None) -> str:
-    """Full track caption with optional payment link and description"""
-    text = f"🎵 <b>{title}</b>\n🎤 {artist_name}\n"
+def track_caption_with_payment(
+    title: str,
+    artist_name: str,
+    payment_link: str | None,
+    caption: str | None,
+    bot_username: str | None = None,
+    track_id: str | None = None,
+    artist_id: str | None = None,
+    profile_url: str | None = None
+) -> str:
+    """Full track caption with links for channel posts (Uzbek).
+
+    Links are embedded in the caption so Telegram comments can appear
+    (inline buttons block the comment section).
+    """
+    text = f"🎵 <b>{title}</b>\n🎤 Ijrochi: {artist_name}\n"
     if caption:
         text += f"\n{caption}\n"
-    if payment_link:
-        text += f"\n💳 Support: {payment_link}"
+
+    # Add links section
+    links = []
+
+    # Donation link (Donat)
+    if bot_username and track_id:
+        donate_url = f"https://t.me/{bot_username}?start=donate_{track_id}"
+        links.append(f"❤️ <a href=\"{donate_url}\">Donat</a>")
+    elif payment_link:
+        links.append(f"💳 Donat: {payment_link}")
+
+    # Profile link (Profil)
+    if bot_username and artist_id:
+        profile_deep_url = f"https://t.me/{bot_username}?start=artist_{artist_id}"
+        links.append(f"👤 <a href=\"{profile_deep_url}\">Profil</a>")
+    elif profile_url:
+        links.append(f"👤 Profil: {profile_url}")
+
+    if links:
+        text += "\n" + " | ".join(links)
+
     return text
 
 

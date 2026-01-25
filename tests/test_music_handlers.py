@@ -151,12 +151,14 @@ class TestCmdStart:
     """Tests for /start command handler"""
 
     @pytest.mark.asyncio
-    async def test_new_user_sees_welcome(self, mock_message, mock_db, mock_config):
+    async def test_new_user_sees_welcome(self, mock_message, mock_db, mock_config, mock_bot):
         """Test new user sees welcome message with language selection"""
         mock_db.get_artist_by_tg = AsyncMock(return_value=None)
         mock_db.get_lang = AsyncMock(return_value="uz")
+        mock_db.user_exists = AsyncMock(return_value=False)
+        mock_db.get_user_type = AsyncMock(return_value=None)
 
-        await cmd_start(mock_message, mock_db, mock_config)
+        await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_called()
         call_args = mock_message.answer.call_args
@@ -167,12 +169,14 @@ class TestCmdStart:
         assert call_args[1].get('reply_markup') is not None
 
     @pytest.mark.asyncio
-    async def test_existing_artist_sees_menu(self, mock_message, mock_db, mock_config, sample_artist):
+    async def test_existing_artist_sees_menu(self, mock_message, mock_db, mock_config, mock_bot, sample_artist):
         """Test existing artist sees command menu"""
         mock_db.get_artist_by_tg = AsyncMock(return_value=sample_artist)
         mock_db.get_lang = AsyncMock(return_value="uz")
+        mock_db.user_exists = AsyncMock(return_value=True)
+        mock_db.get_user_type = AsyncMock(return_value="artist")
 
-        await cmd_start(mock_message, mock_db, mock_config)
+        await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
@@ -180,13 +184,14 @@ class TestCmdStart:
         assert "/submit" in text or "/profile" in text or "Xush kelibsiz" in text
 
     @pytest.mark.asyncio
-    async def test_donate_deep_link_shows_amounts(self, mock_message, mock_db, mock_config, sample_track, sample_artist):
+    async def test_donate_deep_link_shows_amounts(self, mock_message, mock_db, mock_config, mock_bot, sample_track, sample_artist):
         """Test donate deep link shows donation amount selection"""
         mock_message.text = "/start donate_trk_xyz789"
         mock_db.get_track = AsyncMock(return_value=sample_track)
         mock_db.get_artist = AsyncMock(return_value=sample_artist)
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await cmd_start(mock_message, mock_db, mock_config)
+        await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_called()
         call_args = mock_message.answer.call_args
@@ -194,13 +199,13 @@ class TestCmdStart:
         assert call_args[1].get('reply_markup') is not None
 
     @pytest.mark.asyncio
-    async def test_donate_deep_link_track_not_found(self, mock_message, mock_db, mock_config):
+    async def test_donate_deep_link_track_not_found(self, mock_message, mock_db, mock_config, mock_bot):
         """Test donate deep link with unknown track shows error"""
         mock_message.text = "/start donate_unknown"
         mock_db.get_track = AsyncMock(return_value=None)
         mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await cmd_start(mock_message, mock_db, mock_config)
+        await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
@@ -208,27 +213,28 @@ class TestCmdStart:
         assert "not found" in text.lower() or "topilmadi" in text.lower()
 
     @pytest.mark.asyncio
-    async def test_artist_deep_link_shows_profile(self, mock_message, mock_db, mock_config, sample_artist):
+    async def test_artist_deep_link_shows_profile(self, mock_message, mock_db, mock_config, mock_bot, sample_artist):
         """Test artist deep link shows artist profile"""
         mock_message.text = "/start artist_art_abc123"
         mock_db.get_artist = AsyncMock(return_value=sample_artist)
         mock_db.count_artist_tracks = AsyncMock(return_value=5)
         mock_db.list_artist_tracks_with_file = AsyncMock(return_value=[])
+        mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await cmd_start(mock_message, mock_db, mock_config)
+        await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
         assert "Test Artist" in text
 
     @pytest.mark.asyncio
-    async def test_artist_deep_link_not_found(self, mock_message, mock_db, mock_config):
+    async def test_artist_deep_link_not_found(self, mock_message, mock_db, mock_config, mock_bot):
         """Test artist deep link with unknown artist shows error"""
         mock_message.text = "/start artist_unknown"
         mock_db.get_artist = AsyncMock(return_value=None)
         mock_db.get_lang = AsyncMock(return_value="uz")
 
-        await cmd_start(mock_message, mock_db, mock_config)
+        await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_called()
         text = mock_message.answer.call_args[0][0]
@@ -236,11 +242,11 @@ class TestCmdStart:
         assert "not found" in text.lower() or "topilmadi" in text.lower()
 
     @pytest.mark.asyncio
-    async def test_handles_missing_from_user(self, mock_message, mock_db, mock_config):
+    async def test_handles_missing_from_user(self, mock_message, mock_db, mock_config, mock_bot):
         """Test handler gracefully handles missing from_user"""
         mock_message.from_user = None
 
-        result = await cmd_start(mock_message, mock_db, mock_config)
+        result = await cmd_start(mock_message, mock_db, mock_config, mock_bot)
 
         mock_message.answer.assert_not_called()
 
@@ -373,31 +379,33 @@ class TestOnLangChoice:
     """Tests for language selection callback"""
 
     @pytest.mark.asyncio
-    async def test_sets_uzbek_language(self, mock_callback, mock_db):
+    async def test_sets_uzbek_language(self, mock_callback, mock_db, mock_bot):
         """Test selecting Uzbek language"""
         mock_callback.data = "lang:uz"
+        mock_db.get_user_type = AsyncMock(return_value="listener")
 
-        await on_lang_choice(mock_callback, mock_db)
+        await on_lang_choice(mock_callback, mock_db, mock_bot)
 
         mock_db.set_lang.assert_called_with(99999, "uz")
         mock_callback.message.edit_text.assert_called()
         mock_callback.answer.assert_called()
 
     @pytest.mark.asyncio
-    async def test_sets_russian_language(self, mock_callback, mock_db):
+    async def test_sets_russian_language(self, mock_callback, mock_db, mock_bot):
         """Test selecting Russian language"""
         mock_callback.data = "lang:ru"
+        mock_db.get_user_type = AsyncMock(return_value="listener")
 
-        await on_lang_choice(mock_callback, mock_db)
+        await on_lang_choice(mock_callback, mock_db, mock_bot)
 
         mock_db.set_lang.assert_called_with(99999, "ru")
 
     @pytest.mark.asyncio
-    async def test_invalid_language_shows_error(self, mock_callback, mock_db):
+    async def test_invalid_language_shows_error(self, mock_callback, mock_db, mock_bot):
         """Test invalid language selection shows error"""
         mock_callback.data = "lang:invalid"
 
-        await on_lang_choice(mock_callback, mock_db)
+        await on_lang_choice(mock_callback, mock_db, mock_bot)
 
         mock_callback.answer.assert_called()
         # Accept both English and Uzbek error messages

@@ -23,12 +23,25 @@ class DB:
         """Synchronous database initialization - runs in thread"""
         self.conn = psycopg2.connect(self.db_url)
         with self.conn.cursor() as cur:
-            # User settings (language, anonymous default)
+            # User settings (language, anonymous default, user_type)
             cur.execute("""
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id BIGINT PRIMARY KEY,
                 lang TEXT DEFAULT 'uz',
-                anonymous_default INTEGER NOT NULL DEFAULT 0
+                anonymous_default INTEGER NOT NULL DEFAULT 0,
+                user_type TEXT DEFAULT NULL
+            )
+            """)
+
+            # Bot channels (connected channels list)
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS bot_channels (
+                channel_id TEXT PRIMARY KEY,
+                channel_username TEXT,
+                channel_name TEXT NOT NULL,
+                description TEXT,
+                genre TEXT,
+                created_at INTEGER NOT NULL
             )
             """)
 
@@ -148,6 +161,120 @@ class DB:
 
     async def set_anon_default(self, user_id: int, val: int) -> None:
         await asyncio.to_thread(self._set_anon_default_sync, user_id, val)
+
+    def _get_user_type_sync(self, user_id: int) -> Optional[str]:
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT user_type FROM user_settings WHERE user_id=%s", (user_id,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
+    async def get_user_type(self, user_id: int) -> Optional[str]:
+        """Get user type: 'artist' or 'listener' or None (not set)"""
+        return await asyncio.to_thread(self._get_user_type_sync, user_id)
+
+    def _set_user_type_sync(self, user_id: int, user_type: str) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute("""
+            INSERT INTO user_settings(user_id, lang, anonymous_default, user_type)
+            VALUES(%s, 'uz', 0, %s)
+            ON CONFLICT(user_id) DO UPDATE SET user_type=excluded.user_type
+            """, (user_id, user_type))
+            self.conn.commit()
+
+    async def set_user_type(self, user_id: int, user_type: str) -> None:
+        """Set user type: 'artist' or 'listener'"""
+        await asyncio.to_thread(self._set_user_type_sync, user_id, user_type)
+
+    def _user_exists_sync(self, user_id: int) -> bool:
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM user_settings WHERE user_id=%s", (user_id,))
+            return cur.fetchone() is not None
+
+    async def user_exists(self, user_id: int) -> bool:
+        """Check if user exists in database"""
+        return await asyncio.to_thread(self._user_exists_sync, user_id)
+
+    # =====================
+    # Bot Channels
+    # =====================
+    def _add_channel_sync(self, channel_id: str, channel_username: Optional[str],
+                          channel_name: str, description: Optional[str], genre: Optional[str]) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute("""
+            INSERT INTO bot_channels(channel_id, channel_username, channel_name, description, genre, created_at)
+            VALUES(%s, %s, %s, %s, %s, %s)
+            ON CONFLICT(channel_id) DO UPDATE SET
+                channel_username=excluded.channel_username,
+                channel_name=excluded.channel_name,
+                description=excluded.description,
+                genre=excluded.genre
+            """, (channel_id, channel_username, channel_name, description, genre, int(time.time())))
+            self.conn.commit()
+
+    async def add_channel(self, channel_id: str, channel_username: Optional[str],
+                          channel_name: str, description: Optional[str], genre: Optional[str]) -> None:
+        """Add or update a channel in the bot"""
+        await asyncio.to_thread(self._add_channel_sync, channel_id, channel_username,
+                               channel_name, description, genre)
+
+    def _get_all_channels_sync(self) -> List[Tuple]:
+        with self.conn.cursor() as cur:
+            cur.execute("""
+            SELECT channel_id, channel_username, channel_name, description, genre
+            FROM bot_channels
+            ORDER BY channel_name
+            """)
+            return cur.fetchall()
+
+    async def get_all_channels(self) -> List[Tuple]:
+        """Get all connected channels. Returns: [(channel_id, channel_username, channel_name, description, genre)]"""
+        return await asyncio.to_thread(self._get_all_channels_sync)
+
+    def _remove_channel_sync(self, channel_id: str) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM bot_channels WHERE channel_id=%s", (channel_id,))
+            self.conn.commit()
+
+    async def remove_channel(self, channel_id: str) -> None:
+        """Remove a channel from the bot"""
+        await asyncio.to_thread(self._remove_channel_sync, channel_id)
+
+    # =====================
+    # Search
+    # =====================
+    def _search_artists_sync(self, query: str, limit: int = 10) -> List[Tuple]:
+        with self.conn.cursor() as cur:
+            search_pattern = f"%{query}%"
+            cur.execute("""
+            SELECT artist_id, display_name, bio
+            FROM artists
+            WHERE LOWER(display_name) LIKE LOWER(%s)
+            ORDER BY display_name
+            LIMIT %s
+            """, (search_pattern, limit))
+            return cur.fetchall()
+
+    async def search_artists(self, query: str, limit: int = 10) -> List[Tuple]:
+        """Search artists by name. Returns: [(artist_id, display_name, bio)]"""
+        return await asyncio.to_thread(self._search_artists_sync, query, limit)
+
+    def _search_tracks_sync(self, query: str, limit: int = 10) -> List[Tuple]:
+        with self.conn.cursor() as cur:
+            search_pattern = f"%{query}%"
+            cur.execute("""
+            SELECT t.track_id, t.title, t.genre, t.channel_message_id, a.artist_id, a.display_name
+            FROM tracks t
+            JOIN artists a ON t.artist_id = a.artist_id
+            WHERE (LOWER(t.title) LIKE LOWER(%s) OR LOWER(a.display_name) LIKE LOWER(%s))
+              AND t.status = 'ACTIVE'
+            ORDER BY t.created_at DESC
+            LIMIT %s
+            """, (search_pattern, search_pattern, limit))
+            return cur.fetchall()
+
+    async def search_tracks(self, query: str, limit: int = 10) -> List[Tuple]:
+        """Search tracks by title or artist name. Returns: [(track_id, title, genre, channel_msg_id, artist_id, artist_name)]"""
+        return await asyncio.to_thread(self._search_tracks_sync, query, limit)
 
     # =====================
     # Artists

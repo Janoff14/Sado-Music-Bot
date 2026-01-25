@@ -5,13 +5,16 @@ import logging
 import uuid
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, BotCommand
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from sado_music_bot.config import Config
 from sado_music_bot.db import DB
-from sado_music_bot.keyboards import kb_lang, kb_genres, kb_profile_actions, kb_admin_review
+from sado_music_bot.keyboards import (
+    kb_lang, kb_genres, kb_profile_actions, kb_admin_review,
+    kb_user_type, kb_search_result_artist, kb_search_result_track
+)
 from sado_music_bot.texts import track_caption_with_payment
 from sado_music_bot.i18n import t
 
@@ -40,11 +43,15 @@ class ProfileEditStates(StatesGroup):
     waiting_value = State()
 
 
+class SearchStates(StatesGroup):
+    waiting_query = State()
+
+
 # =====================
 # /start
 # =====================
 @router.message(Command("start"))
-async def cmd_start(m: Message, db: DB, cfg: Config):
+async def cmd_start(m: Message, db: DB, cfg: Config, bot: Bot):
     if not m.from_user:
         return
 
@@ -128,17 +135,70 @@ async def cmd_start(m: Message, db: DB, cfg: Config):
 
             return
 
-    # Default /start behavior
+    # Default /start behavior - check if user exists and has type set
+    user_exists = await db.user_exists(user_id)
+    user_type = await db.get_user_type(user_id)
     artist = await db.get_artist_by_tg(user_id)
 
-    if artist:
-        await m.answer(t("welcome_back", lang))
+    if user_exists and user_type:
+        # Existing user with type set - welcome back
+        if artist:
+            await m.answer(t("welcome_back", lang))
+        else:
+            # Listener or user without artist profile
+            await show_channels_list(m, db, lang)
+        # Set commands menu
+        await set_commands_for_user(bot, user_id, lang, is_artist=(artist is not None))
     else:
+        # New user - show language selection first
         await m.answer(t("welcome_new", lang), reply_markup=kb_lang())
 
 
+async def set_commands_for_user(bot: Bot, user_id: int, lang: str, is_artist: bool = False):
+    """Set the commands menu for the user based on their language"""
+    if lang == "ru":
+        commands = [
+            BotCommand(command="start", description="Запустить бота"),
+            BotCommand(command="kanaly", description="Список каналов"),
+            BotCommand(command="poisk", description="Поиск артиста/трека"),
+            BotCommand(command="pomosh", description="Помощь"),
+        ]
+    else:  # uz
+        commands = [
+            BotCommand(command="start", description="Botni ishga tushirish"),
+            BotCommand(command="kanallar", description="Kanallar ro'yxati"),
+            BotCommand(command="qidiruv", description="Ijrochi/trek qidirish"),
+            BotCommand(command="yordam", description="Yordam"),
+        ]
+
+    try:
+        from aiogram.types import BotCommandScopeChat
+        await bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=user_id))
+    except Exception as e:
+        logger.warning(f"Failed to set commands for user {user_id}: {e}")
+
+
+async def show_channels_list(m: Message, db: DB, lang: str):
+    """Show the list of connected channels"""
+    channels = await db.get_all_channels()
+
+    if not channels:
+        await m.answer(t("no_channels", lang))
+        return
+
+    text = t("channels_list_header", lang) + "\n\n"
+
+    for channel in channels:
+        channel_id, channel_username, channel_name, description, genre = channel
+        link = f"@{channel_username}" if channel_username else f"ID: {channel_id}"
+        desc_text = description if description else ""
+        text += t("channel_item", lang, name=channel_name, description=desc_text, link=link) + "\n"
+
+    await m.answer(text)
+
+
 @router.callback_query(F.data.startswith("lang:"))
-async def on_lang_choice(cb: CallbackQuery, db: DB):
+async def on_lang_choice(cb: CallbackQuery, db: DB, bot: Bot):
     if not cb.from_user or not cb.data:
         return
 
@@ -148,7 +208,51 @@ async def on_lang_choice(cb: CallbackQuery, db: DB):
         return
 
     await db.set_lang(cb.from_user.id, lang)
-    await cb.message.edit_text(t("language_saved", lang))
+
+    # Check if user type is already set
+    user_type = await db.get_user_type(cb.from_user.id)
+
+    if user_type:
+        # User already has type, just confirm language
+        await cb.message.edit_text(t("language_saved", lang))
+    else:
+        # New user - ask for user type
+        await cb.message.edit_text(t("choose_user_type", lang), reply_markup=kb_user_type(lang))
+
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("usertype:"))
+async def on_user_type_choice(cb: CallbackQuery, db: DB, state: FSMContext, bot: Bot):
+    if not cb.from_user or not cb.data:
+        return
+
+    user_type = cb.data.split(":")[1]
+    user_id = cb.from_user.id
+    lang = await db.get_lang(user_id)
+
+    await db.set_user_type(user_id, user_type)
+
+    if user_type == "artist":
+        # Start artist onboarding
+        await cb.message.edit_text(t("onboard_start", lang))
+        await state.set_state(OnboardingStates.waiting_name)
+    else:
+        # Listener - show channels list
+        await cb.message.edit_text(t("listener_welcome", lang))
+        # Show channels
+        channels = await db.get_all_channels()
+        if channels:
+            text = "\n📺 <b>" + ("Каналы:" if lang == "ru" else "Kanallar:") + "</b>\n\n"
+            for channel in channels:
+                channel_id, channel_username, channel_name, description, genre = channel
+                link = f"@{channel_username}" if channel_username else f"t.me/c/{channel_id}"
+                desc_text = f"\n   {description}" if description else ""
+                text += f"🎵 <b>{channel_name}</b>{desc_text}\n   🔗 {link}\n\n"
+            await cb.message.answer(text)
+
+    # Set commands menu
+    await set_commands_for_user(bot, user_id, lang, is_artist=(user_type == "artist"))
     await cb.answer()
 
 
@@ -172,6 +276,120 @@ async def cmd_language(m: Message, db: DB):
         return
     lang = await db.get_lang(m.from_user.id)
     await m.answer(t("select_language", lang), reply_markup=kb_lang())
+
+
+# =====================
+# /kanallar, /kanaly (Channels list)
+# =====================
+@router.message(Command("kanallar"))
+@router.message(Command("kanaly"))
+async def cmd_channels(m: Message, db: DB):
+    """Show list of connected channels"""
+    if not m.from_user:
+        return
+    lang = await db.get_lang(m.from_user.id)
+    await show_channels_list(m, db, lang)
+
+
+# =====================
+# /qidiruv, /poisk (Search)
+# =====================
+@router.message(Command("qidiruv"))
+@router.message(Command("poisk"))
+async def cmd_search(m: Message, db: DB, state: FSMContext):
+    """Start search for artist or track"""
+    if not m.from_user:
+        return
+    lang = await db.get_lang(m.from_user.id)
+    await m.answer(t("search_prompt", lang))
+    await state.set_state(SearchStates.waiting_query)
+
+
+@router.message(SearchStates.waiting_query, F.text)
+async def on_search_query(m: Message, db: DB, cfg: Config, state: FSMContext):
+    """Process search query"""
+    if not m.from_user or not m.text:
+        return
+    if m.text.startswith("/"):
+        await state.clear()
+        return
+
+    lang = await db.get_lang(m.from_user.id)
+    query = m.text.strip()
+
+    if len(query) < 2:
+        await m.answer(t("search_prompt", lang))
+        return
+
+    # Search for artists and tracks
+    artists = await db.search_artists(query, limit=5)
+    tracks = await db.search_tracks(query, limit=5)
+
+    if not artists and not tracks:
+        await m.answer(t("search_no_results", lang))
+        await state.clear()
+        return
+
+    # Build results text
+    text = t("search_results_header", lang) + "\n"
+
+    # Artists section
+    if artists:
+        text += "\n🎤 <b>" + ("Артисты:" if lang == "ru" else "Ijrochilar:") + "</b>\n"
+        for artist in artists:
+            artist_id, display_name, bio = artist
+            bio_text = f" — {bio[:50]}..." if bio and len(bio) > 50 else (f" — {bio}" if bio else "")
+            text += f"\n• <b>{display_name}</b>{bio_text}\n"
+            # Add inline button for each artist
+
+    # Tracks section
+    if tracks:
+        text += "\n🎵 <b>" + ("Треки:" if lang == "ru" else "Treklar:") + "</b>\n"
+        for track in tracks:
+            track_id, title, genre, channel_msg_id, artist_id, artist_name = track
+            text += f"\n• <b>{title}</b> — {artist_name} ({genre})\n"
+
+    await m.answer(text)
+
+    # Send artist profiles with buttons
+    bot_username = cfg.bot_username
+    if artists and bot_username:
+        for artist in artists[:3]:  # Limit to 3
+            artist_id, display_name, bio = artist
+            await m.answer(
+                f"🎤 <b>{display_name}</b>",
+                reply_markup=kb_search_result_artist(artist_id, bot_username, lang)
+            )
+
+    # Send track buttons
+    if tracks and bot_username:
+        for track in tracks[:3]:  # Limit to 3
+            track_id, title, genre, channel_msg_id, artist_id, artist_name = track
+            await m.answer(
+                f"🎵 <b>{title}</b>\n🎤 {artist_name}",
+                reply_markup=kb_search_result_track(
+                    track_id, artist_id, bot_username,
+                    channel_username=None,  # TODO: Get from config based on genre
+                    channel_msg_id=channel_msg_id,
+                    lang=lang
+                )
+            )
+
+    await state.clear()
+
+
+# =====================
+# /yordam, /pomosh, /help (Help)
+# =====================
+@router.message(Command("yordam"))
+@router.message(Command("pomosh"))
+@router.message(Command("help"))
+async def cmd_help(m: Message, db: DB):
+    """Show help with all available commands"""
+    if not m.from_user:
+        return
+    lang = await db.get_lang(m.from_user.id)
+    await m.answer(t("help_text", lang))
 
 
 # =====================
