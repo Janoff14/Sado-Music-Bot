@@ -111,7 +111,26 @@ class DB:
             """)
 
             self.conn.commit()
+
+            # Run migrations for existing tables
+            self._run_migrations(cur)
             logger.info("Database tables initialized successfully")
+
+    def _run_migrations(self, cur) -> None:
+        """Run schema migrations for existing databases"""
+        # Migration: Add user_type column to user_settings if it doesn't exist
+        try:
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='user_settings' AND column_name='user_type'
+            """)
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE user_settings ADD COLUMN user_type TEXT DEFAULT NULL")
+                self.conn.commit()
+                logger.info("Migration: Added user_type column to user_settings")
+        except Exception as e:
+            self.conn.rollback()
+            logger.warning(f"Migration check for user_type failed: {e}")
 
     async def init(self) -> None:
         """Initialize database tables (non-blocking)"""
@@ -121,10 +140,15 @@ class DB:
     # User Settings
     # =====================
     def _get_lang_sync(self, user_id: int) -> str:
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT lang FROM user_settings WHERE user_id=%s", (user_id,))
-            row = cur.fetchone()
-            return row[0] if row else "uz"
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT lang FROM user_settings WHERE user_id=%s", (user_id,))
+                row = cur.fetchone()
+                return row[0] if row else "uz"
+        except Exception as e:
+            self.conn.rollback()
+            logger.warning(f"Error getting lang for {user_id}: {e}")
+            return "uz"
 
     async def get_lang(self, user_id: int) -> str:
         return await asyncio.to_thread(self._get_lang_sync, user_id)
@@ -163,10 +187,15 @@ class DB:
         await asyncio.to_thread(self._set_anon_default_sync, user_id, val)
 
     def _get_user_type_sync(self, user_id: int) -> Optional[str]:
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT user_type FROM user_settings WHERE user_id=%s", (user_id,))
-            row = cur.fetchone()
-            return row[0] if row else None
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT user_type FROM user_settings WHERE user_id=%s", (user_id,))
+                row = cur.fetchone()
+                return row[0] if row else None
+        except Exception as e:
+            self.conn.rollback()
+            logger.warning(f"Error getting user_type for {user_id}: {e}")
+            return None
 
     async def get_user_type(self, user_id: int) -> Optional[str]:
         """Get user type: 'artist' or 'listener' or None (not set)"""
