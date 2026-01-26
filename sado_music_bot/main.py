@@ -22,6 +22,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+async def sync_channels_from_config(cfg: Config, db: DB, bot: Bot):
+    """Sync channels from config to database so /kanallar works"""
+    # Map of genre -> (channel_attr, description)
+    channels_config = [
+        ("channel_pop", "Pop", "🎤 Pop musiqa kanali"),
+        ("channel_rock", "Rock", "🎸 Rock musiqa kanali"),
+        ("channel_hiphop", "Hip Hop", "🎧 Hip Hop / Rap kanali"),
+        ("channel_discovery", "Discovery", "🔍 Yangi san'atkorlar kanali"),
+    ]
+
+    for attr_name, genre, description in channels_config:
+        channel_val = getattr(cfg, attr_name, "")
+        if not channel_val:
+            continue
+
+        try:
+            # Get channel info from Telegram
+            chat = await bot.get_chat(channel_val)
+            channel_id = str(chat.id)
+            channel_username = chat.username
+            channel_name = chat.title or genre
+
+            # Add/update in database
+            await db.add_channel(channel_id, channel_username, channel_name, description, genre)
+            logger.info(f"Synced channel: {channel_name} (@{channel_username or channel_id})")
+        except Exception as e:
+            logger.warning(f"Failed to sync channel {attr_name}={channel_val}: {e}")
+
 async def main():
     cfg: Config = load_config()
     db = DB(cfg.db_path)
@@ -58,6 +87,9 @@ async def main():
     logger.info(f"   Hip Hop: {cfg.discussion_hiphop or '(not set)'}")
     logger.info(f"   Discovery: {cfg.discussion_discovery or '(not set)'}")
     logger.info("=" * 50)
+
+    # Sync channels from config to database
+    await sync_channels_from_config(cfg, db, bot)
 
     await dp.start_polling(bot, cfg=cfg, db=db)
 

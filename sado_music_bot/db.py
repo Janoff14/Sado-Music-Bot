@@ -125,12 +125,23 @@ class DB:
                 WHERE table_name='user_settings' AND column_name='user_type'
             """)
             if not cur.fetchone():
+                self.conn.rollback()  # Clear any pending transaction state
                 cur.execute("ALTER TABLE user_settings ADD COLUMN user_type TEXT DEFAULT NULL")
                 self.conn.commit()
                 logger.info("Migration: Added user_type column to user_settings")
+            else:
+                self.conn.commit()  # Commit the SELECT to clear transaction
         except Exception as e:
             self.conn.rollback()
             logger.warning(f"Migration check for user_type failed: {e}")
+            # Try to add column anyway (might fail if already exists, that's ok)
+            try:
+                cur.execute("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS user_type TEXT DEFAULT NULL")
+                self.conn.commit()
+                logger.info("Migration: Added user_type column (retry)")
+            except Exception as e2:
+                self.conn.rollback()
+                logger.warning(f"Migration retry failed: {e2}")
 
     async def init(self) -> None:
         """Initialize database tables (non-blocking)"""
@@ -215,9 +226,14 @@ class DB:
         await asyncio.to_thread(self._set_user_type_sync, user_id, user_type)
 
     def _user_exists_sync(self, user_id: int) -> bool:
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM user_settings WHERE user_id=%s", (user_id,))
-            return cur.fetchone() is not None
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM user_settings WHERE user_id=%s", (user_id,))
+                return cur.fetchone() is not None
+        except Exception as e:
+            self.conn.rollback()
+            logger.warning(f"Error checking user_exists for {user_id}: {e}")
+            return False
 
     async def user_exists(self, user_id: int) -> bool:
         """Check if user exists in database"""
