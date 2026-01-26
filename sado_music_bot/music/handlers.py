@@ -145,8 +145,8 @@ async def cmd_start(m: Message, db: DB, cfg: Config, bot: Bot):
         if artist:
             await m.answer(t("welcome_back", lang))
         else:
-            # Listener or user without artist profile
-            await show_channels_list(m, db, lang)
+            # Listener - show listener welcome message
+            await m.answer(t("listener_welcome", lang))
         # Set commands menu
         await set_commands_for_user(bot, user_id, lang, is_artist=(artist is not None))
     else:
